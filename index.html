@@ -4,22 +4,48 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Trazo Workspace | Engenharia & Arquitetura</title>
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <!-- Babel para compilar JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- Lucide Icons -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
   </head>
   <body class="bg-[#070b19] text-slate-100 font-sans m-0 p-0 selection:bg-cyan-500/30">
     <div id="root"></div>
 
     <script type="text/babel">
-      const { useState, useEffect, useMemo } = React;
+      const { useState, useEffect, useRef, useMemo } = React;
       const LucideIcons = window.lucide;
+
+      const firebaseConfig = {
+        apiKey: "AIzaSyCEODV9lJYlpFcOen1qJGpwcABFxudAPf8",
+        authDomain: "trazo-workspace.firebaseapp.com",
+        projectId: "trazo-workspace",
+        storageBucket: "trazo-workspace.firebasestorage.app",
+        messagingSenderId: "794212882855",
+        appId: "1:794212882855:web:f5a04f4129ac6d1b1c3e82"
+      };
+
+      let app, auth, db;
+      try {
+        if (window.firebase) {
+          app = window.firebase.initializeApp(firebaseConfig);
+          auth = window.firebase.auth();
+          db = window.firebase.firestore();
+        }
+      } catch (e) {
+        console.warn("Firebase initialized via fallback.");
+      }
+
+      const appId = 'trazo-workspace-v1';
+      const LOCAL_STORAGE_CLIENTS_KEY = 'trazo_clients_v1';
+      const LOCAL_STORAGE_CARDS_KEY = 'trazo_cards_v1';
+      const LOCAL_STORAGE_MEMBERS_KEY = 'trazo_members_v1';
+      const LOCAL_STORAGE_ACTIVE_USER_KEY = 'trazo_active_user_v1';
+      const LOCAL_STORAGE_COLUMNS_KEY = 'trazo_columns_v1';
 
       const DEFAULT_COLUMNS = [
         { id: 'solicitacoes', label: 'Solicitações', color: 'bg-slate-900/80 border-slate-700' },
@@ -29,29 +55,119 @@
         { id: 'concluido', label: 'Concluído', color: 'bg-emerald-950/50 border-emerald-800/60' },
       ];
 
-      function App() {
-        const [columns] = useState(DEFAULT_COLUMNS);
-        const [cards, setCards] = useState([
-          { id: '1', title: 'Projeto de Incêndio - Matriz', status: 'solicitacoes', client: 'Empresa A' },
-          { id: '2', title: 'Regularização AVCB - Loja Centro', status: 'elaboracao', client: 'Comércio B' }
-        ]);
-        const [currentView, setCurrentView] = useState('kanban');
-        const [isModalOpen, setIsModalOpen] = useState(false);
-        const [newTitle, setNewTitle] = useState('');
-        const [newClient, setNewClient] = useState('');
+      const DEFAULT_MEMBERS = [
+        { 
+          id: 'm_master_gabriella', 
+          name: 'Gabriella Gontijo', 
+          role: 'Engenheira / Gestora Master', 
+          email: 'gabriella@trazo.com.br', 
+          pin: '1234',
+          isSystemAdmin: true, 
+          canAccessKanban: true, canAccessResponsibilities: true,
+          canAccessFinancialAdmin: true, canAccessFinancialOps: true,
+          canAccessClients: true, canAccessMembers: true
+        },
+        { 
+          id: 'm_2', 
+          name: 'William Portela', 
+          role: 'Projetista / T. Técnico', 
+          email: 'william@trazo.com.br', 
+          pin: '0000',
+          isSystemAdmin: false, 
+          canAccessKanban: true, canAccessResponsibilities: true,
+          canAccessFinancialAdmin: false, canAccessFinancialOps: true,
+          canAccessClients: true, canAccessMembers: false
+        }
+      ];
 
-        const handleAddCard = (e) => {
-          e.preventDefault();
-          if (!newTitle.trim()) return;
-          setCards(prev => [...prev, { id: `card_${Date.now()}`, title: newTitle, client: newClient || 'Cliente Geral', status: 'solicitacoes' }]);
-          setNewTitle('');
-          setNewClient('');
-          setIsModalOpen(false);
+      const PRESET_TAGS = [
+        { id: 't_1', name: 'CLCB', color: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' },
+        { id: 't_2', name: 'AVCB', color: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40' },
+        { id: 't_3', name: 'Vistoria Urgente', color: 'bg-rose-500/20 text-rose-300 border-rose-500/40' },
+        { id: 't_4', name: 'Projeto Comercial', color: 'bg-amber-500/20 text-amber-300 border-amber-500/40' },
+      ];
+
+      function App() {
+        const [user, setUser] = useState(null);
+        const [columns, setColumns] = useState(() => JSON.parse(localStorage.getItem(LOCAL_STORAGE_COLUMNS_KEY) || JSON.stringify(DEFAULT_COLUMNS)));
+        const [members, setMembers] = useState(() => JSON.parse(localStorage.getItem(LOCAL_STORAGE_MEMBERS_KEY) || JSON.stringify(DEFAULT_MEMBERS)));
+        const [clients, setClients] = useState(() => JSON.parse(localStorage.getItem(LOCAL_STORAGE_CLIENTS_KEY) || '[]'));
+        const [cards, setCards] = useState(() => JSON.parse(localStorage.getItem(LOCAL_STORAGE_CARDS_KEY) || '[]'));
+        const [activeMemberId, setActiveMemberId] = useState(() => localStorage.getItem(LOCAL_STORAGE_ACTIVE_USER_KEY) || 'm_master_gabriella');
+
+        const activeMember = useMemo(() => members.find(m => m.id === activeMemberId) || members[0], [activeMemberId, members]);
+        const [currentView, setCurrentView] = useState('kanban');
+
+        const [isCardModalOpen, setIsCardModalOpen] = useState(false);
+        const [editingCard, setEditingCard] = useState(null);
+        const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+        const [editingClient, setEditingClient] = useState(null);
+        const [toastMessage, setToastMessage] = useState(null);
+
+        const showToast = (message, type = 'success') => {
+          setToastMessage({ message, type });
+          setTimeout(() => setToastMessage(null), 4000);
+        };
+
+        useEffect(() => {
+          localStorage.setItem(LOCAL_STORAGE_COLUMNS_KEY, JSON.stringify(columns));
+          localStorage.setItem(LOCAL_STORAGE_MEMBERS_KEY, JSON.stringify(members));
+          localStorage.setItem(LOCAL_STORAGE_CLIENTS_KEY, JSON.stringify(clients));
+          localStorage.setItem(LOCAL_STORAGE_CARDS_KEY, JSON.stringify(cards));
+          localStorage.setItem(LOCAL_STORAGE_ACTIVE_USER_KEY, activeMemberId);
+        }, [columns, members, clients, cards, activeMemberId]);
+
+        useEffect(() => {
+          if (!auth) return;
+          auth.signInAnonymously().catch(() => {});
+          const unsub = auth.onAuthStateChanged(setUser);
+          return () => unsub();
+        }, []);
+
+        const handleSaveCard = (cardData) => {
+          const cardId = cardData.id || `card_${Date.now()}`;
+          const cardToSave = {
+            ...cardData,
+            id: cardId,
+            status: cardData.status || columns[0].id,
+            payments: cardData.payments || [],
+            checklist: cardData.checklist || [],
+            tags: cardData.tags || [],
+            images: cardData.images || [],
+            updatedAt: new Date().toISOString()
+          };
+          setCards(prev => {
+            const exists = prev.some(c => c.id === cardId);
+            if (exists) return prev.map(c => c.id === cardId ? cardToSave : c);
+            return [cardToSave, ...prev];
+          });
+          setIsCardModalOpen(false);
+          setEditingCard(null);
+          showToast('Cartão salvo com sucesso!');
+        };
+
+        const handleSaveClient = (clientData) => {
+          const clientId = clientData.id || `client_${Date.now()}`;
+          const clientToSave = { ...clientData, id: clientId };
+          setClients(prev => {
+            const exists = prev.some(c => c.id === clientId);
+            if (exists) return prev.map(c => c.id === clientId ? clientToSave : c);
+            return [clientToSave, ...prev];
+          });
+          setIsClientModalOpen(false);
+          setEditingClient(null);
+          showToast('Cliente salvo com sucesso!');
         };
 
         return (
           <div className="min-h-screen bg-[#070b19] text-slate-100 flex flex-col md:flex-row relative">
-            <aside className="w-full md:w-64 bg-[#0a1128]/90 backdrop-blur-xl border-r border-slate-800 p-6 flex flex-col justify-between shrink-0">
+            {toastMessage && (
+              <div className="fixed bottom-5 right-5 z-50 px-4 py-3 rounded-xl shadow-2xl border bg-emerald-950 border-emerald-500 text-emerald-200">
+                {toastMessage.message}
+              </div>
+            )}
+
+            <aside className="w-full md:w-64 bg-[#0a1128]/90 backdrop-blur-xl border-r border-slate-800 p-6 flex flex-col justify-between shrink-0 shadow-2xl">
               <div>
                 <h1 className="text-2xl font-serif text-slate-100 tracking-widest font-extralight">TRAZO</h1>
                 <p className="text-[9px] text-slate-400 tracking-[0.25em] uppercase mt-0.5">ENGENHARIA & ARQUITETURA</p>
@@ -59,34 +175,56 @@
                   WORKSPACE PRO
                 </div>
 
-                <nav className="mt-6 space-y-2">
+                <nav className="mt-6 space-y-1.5">
                   <button onClick={() => setCurrentView('kanban')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all text-sm font-medium ${currentView === 'kanban' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'text-slate-400 hover:bg-white/5'}`}>
+                    <LucideIcons.LayoutDashboard size={18} />
                     <span>Painel Kanban</span>
                   </button>
                   <button onClick={() => setCurrentView('clients')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all text-sm font-medium ${currentView === 'clients' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'text-slate-400 hover:bg-white/5'}`}>
+                    <LucideIcons.Users size={18} />
                     <span>Clientes Cadastrados</span>
+                  </button>
+                  <button onClick={() => setCurrentView('members')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all text-sm font-medium ${currentView === 'members' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'text-slate-400 hover:bg-white/5'}`}>
+                    <LucideIcons.UserCheck size={18} />
+                    <span>Equipe & Permissões</span>
                   </button>
                 </nav>
               </div>
 
-              <div className="p-3 bg-[#080d1e] border border-slate-800 rounded-2xl text-xs space-y-1">
-                <div className="font-bold text-slate-200">Gabriella Gontijo</div>
-                <div className="text-[10px] text-cyan-400">Engenheira / Gestora Master</div>
+              <div className="p-3 bg-[#080d1e] border border-slate-800 rounded-2xl text-xs space-y-2">
+                <div className="font-bold text-slate-200">{activeMember.name}</div>
+                <div className="text-[10px] text-cyan-400">{activeMember.role}</div>
+                <select 
+                  value={activeMemberId} 
+                  onChange={e => setActiveMemberId(e.target.value)}
+                  className="bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-lg p-1.5 w-full outline-none mt-1"
+                >
+                  {members.map(m => <option key={m.id} value={m.id}>{m.name} ({m.isSystemAdmin ? 'Master' : 'Membro'})</option>)}
+                </select>
               </div>
             </aside>
 
             <main className="flex-1 flex flex-col h-screen overflow-hidden">
-              <header className="px-6 py-4 border-b border-slate-800 bg-[#0a1128]/60 backdrop-blur-md flex justify-between items-center">
+              <header className="px-6 py-4 border-b border-slate-800 bg-[#0a1128]/60 backdrop-blur-md flex justify-between items-center shadow-md">
                 <h2 className="text-xl font-extrabold text-slate-100">
-                  {currentView === 'kanban' ? 'Painel Kanban Operacional' : 'Gestão de Clientes'}
+                  {currentView === 'kanban' && 'Painel Kanban Operacional'}
+                  {currentView === 'clients' && 'Gestão de Clientes'}
+                  {currentView === 'members' && 'Equipe & Gestão de Permissões'}
                 </h2>
-                <button onClick={() => setIsModalOpen(true)} className="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg transition-all">
-                  + Novo Cartão
+                <button 
+                  onClick={() => {
+                    if (currentView === 'clients') { setEditingClient(null); setIsClientModalOpen(true); }
+                    else { setEditingCard(null); setIsCardModalOpen(true); }
+                  }} 
+                  className="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg transition-all flex items-center space-x-2"
+                >
+                  <LucideIcons.Plus size={16} />
+                  <span>{currentView === 'clients' ? 'Novo Cliente' : 'Novo Cartão'}</span>
                 </button>
               </header>
 
               <div className="flex-1 p-6 overflow-auto">
-                {currentView === 'kanban' ? (
+                {currentView === 'kanban' && (
                   <div className="flex space-x-4 overflow-x-auto pb-4 h-full items-start">
                     {columns.map(col => {
                       const columnCards = cards.filter(c => c.status === col.id);
@@ -97,42 +235,97 @@
                             <span className="bg-cyan-500/20 text-cyan-300 text-[10px] px-2 py-0.5 rounded-full font-bold">{columnCards.length}</span>
                           </div>
                           <div className="p-3 space-y-3 flex-1 overflow-y-auto max-h-[70vh]">
-                            {columnCards.map(card => (
-                              <div key={card.id} className="bg-[#0e1738] border border-slate-700/60 rounded-2xl p-4 shadow-xl space-y-2">
-                                <span className="text-[10px] text-cyan-400 font-mono block">{card.client}</span>
-                                <h4 className="font-bold text-sm text-slate-100">{card.title}</h4>
-                              </div>
-                            ))}
+                            {columnCards.map(card => {
+                              const client = clients.find(c => c.id === card.clientId);
+                              return (
+                                <div key={card.id} onClick={() => { setEditingCard(card); setIsCardModalOpen(true); }} className="bg-[#0e1738] border border-slate-700/60 hover:border-cyan-500 rounded-2xl p-4 shadow-xl cursor-pointer space-y-2">
+                                  <span className="text-[10px] text-cyan-400 font-mono block font-bold">{client?.name || 'Cliente Não Vinculado'}</span>
+                                  <h4 className="font-bold text-sm text-slate-100">{card.title}</h4>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       );
                     })}
                   </div>
-                ) : (
-                  <div className="text-slate-300 text-sm p-4 bg-[#0a1128] border border-slate-800 rounded-2xl shadow-xl">
-                    Lista de clientes e projetos associados ao escritório Trazo.
+                )}
+
+                {currentView === 'clients' && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {clients.map(client => (
+                      <div key={client.id} className="bg-[#0a1128] border border-slate-800 rounded-2xl p-4 space-y-2 shadow-xl">
+                        <h4 className="font-bold text-slate-100 text-sm">{client.name}</h4>
+                        <p className="text-xs text-slate-400 font-mono">CNPJ: {client.cnpj || 'N/A'}</p>
+                      </div>
+                    ))}
+                    {clients.length === 0 && <p className="text-sm text-slate-400 italic">Nenhum cliente cadastrado. Clique em "Novo Cliente".</p>}
+                  </div>
+                )}
+
+                {currentView === 'members' && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {members.map(m => (
+                      <div key={m.id} className="bg-[#0a1128] border border-slate-800 rounded-2xl p-4 space-y-2 shadow-xl">
+                        <h4 className="font-bold text-slate-100 text-sm flex items-center gap-1">
+                          <span>{m.name}</span>
+                          {m.isSystemAdmin && <LucideIcons.Shield size={14} className="text-amber-400" />}
+                        </h4>
+                        <p className="text-xs text-cyan-400">{m.role}</p>
+                        <p className="text-[10px] text-slate-400 font-mono">E-mail: {m.email}</p>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
             </main>
 
-            {isModalOpen && (
+            {/* MODAL CARD */}
+            {isCardModalOpen && (
               <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
                 <div className="bg-[#0a1128] border border-slate-800 rounded-3xl p-6 w-full max-w-lg space-y-4 shadow-2xl">
-                  <h3 className="text-lg font-bold text-slate-100">Criar Novo Cartão Kanban</h3>
+                  <h3 className="text-lg font-bold text-slate-100">Criar / Editar Cartão Kanban</h3>
                   <div className="space-y-3">
                     <div>
-                      <label className="text-xs text-slate-400 block mb-1">Título do Projeto / Solicitação</label>
-                      <input type="text" placeholder="Ex: Projeto AVCB" value={newTitle} onChange={e => setNewTitle(e.target.value)} className="bg-slate-950 border border-slate-800 text-slate-100 text-sm rounded-xl p-3 w-full outline-none focus:border-cyan-500" />
+                      <label className="text-xs text-slate-400 block mb-1 font-bold">Título da Solicitação</label>
+                      <input type="text" placeholder="Ex: Projeto de Incêndio" id="modal-card-title" defaultValue={editingCard?.title || ''} className="bg-slate-950 border border-slate-800 text-slate-100 text-sm rounded-xl p-3 w-full outline-none focus:border-cyan-500" />
                     </div>
                     <div>
-                      <label className="text-xs text-slate-400 block mb-1">Nome do Cliente</label>
-                      <input type="text" placeholder="Ex: Construtora XYZ" value={newClient} onChange={e => setNewClient(e.target.value)} className="bg-slate-950 border border-slate-800 text-slate-100 text-sm rounded-xl p-3 w-full outline-none focus:border-cyan-500" />
+                      <label className="text-xs text-slate-400 block mb-1 font-bold">Cliente</label>
+                      <select id="modal-card-client" defaultValue={editingCard?.clientId || clients[0]?.id || ''} className="bg-slate-950 border border-slate-800 text-slate-100 text-sm rounded-xl p-3 w-full outline-none focus:border-cyan-500">
+                        <option value="" disabled>Selecione o cliente...</option>
+                        {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
                     </div>
                   </div>
+                  <div className="flex justify-end space-x-2 pt-2 border-t border-slate-800">
+                    <button onClick={() => setIsCardModalOpen(false)} className="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-bold rounded-xl">Cancelar</button>
+                    <button onClick={() => {
+                      const title = document.getElementById('modal-card-title').value;
+                      const clientId = document.getElementById('modal-card-client').value;
+                      if(title) handleSaveCard({ ...editingCard, title, clientId });
+                    }} className="px-5 py-2 bg-cyan-600 text-white text-xs font-bold rounded-xl">Salvar Cartão</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* MODAL CLIENTE */}
+            {isClientModalOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+                <div className="bg-[#0a1128] border border-slate-800 rounded-3xl p-6 w-full max-w-md space-y-4 shadow-2xl">
+                  <h3 className="text-lg font-bold text-slate-100">Novo Cliente Cadastrado</h3>
+                  <div className="space-y-3">
+                    <input type="text" placeholder="Nome / Razão Social" id="modal-client-name" className="bg-slate-950 border border-slate-800 text-slate-100 text-sm rounded-xl p-3 w-full outline-none" />
+                    <input type="text" placeholder="CNPJ" id="modal-client-cnpj" className="bg-slate-950 border border-slate-800 text-slate-100 text-sm rounded-xl p-3 w-full outline-none" />
+                  </div>
                   <div className="flex justify-end space-x-2 pt-2">
-                    <button onClick={() => setIsModalOpen(false)} className="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-bold rounded-xl">Cancelar</button>
-                    <button onClick={handleAddCard} className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-xl">Salvar Cartão</button>
+                    <button onClick={() => setIsClientModalOpen(false)} className="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-bold rounded-xl">Cancelar</button>
+                    <button onClick={() => {
+                      const name = document.getElementById('modal-client-name').value;
+                      const cnpj = document.getElementById('modal-client-cnpj').value;
+                      if(name) handleSaveClient({ name, cnpj });
+                    }} className="px-5 py-2 bg-cyan-600 text-white text-xs font-bold rounded-xl">Salvar Cliente</button>
                   </div>
                 </div>
               </div>
