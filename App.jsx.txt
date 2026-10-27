@@ -832,4 +832,1074 @@ export default function App() {
 function ModalWrapper({ isOpen, onClose, title, children, maxWidth = "max-w-2xl" }) {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+      <div className={`bg-[#0a1128] border border-slate-800 rounded-3xl shadow-2xl w-full ${maxWidth} overflow-hidden flex flex-col max-h-[90vh]`}>
+        <div className="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-[#070c1e]">
+          <h3 className="text-lg font-bold text-slate-100 flex items-center space-x-2">
+            <Sparkles size={18} className="text-cyan-400" />
+            <span>{title}</span>
+          </h3>
+          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-white rounded-xl">
+            <X size={20} />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- MEMBER AVATAR ---
+function MemberAvatar({ name, avatarUrl, size = "w-6 h-6", textSize = "text-[10px]" }) {
+  const initial = (name || '?').charAt(0).toUpperCase();
+  if (avatarUrl) {
+    return <img src={avatarUrl} alt={name} className={`${size} rounded-full object-cover border border-slate-700 shrink-0`} />;
+  }
+  return (
+    <div className={`${size} rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-cyan-300 ${textSize} shrink-0`}>
+      {initial}
+    </div>
+  );
+}
+
+// --- KANBAN BOARD ---
+function KanbanBoard({ cards, clients, members, columns, activeMember, onCardClick, onUpdateStatus, onToggleTask, onEditColumn, onDeleteColumn }) {
+  const [draggedCardId, setDraggedCardId] = useState(null);
+  const scrollContainerRef = useRef(null);
+
+  const handleScroll = (direction) => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollBy({ left: direction === 'left' ? -340 : 340, behavior: 'smooth' });
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-full space-y-3">
+      <div className="flex justify-between items-center text-xs text-slate-400 px-1">
+        <span className="font-semibold text-slate-300 flex items-center gap-1.5">
+          <LayoutDashboard size={14} className="text-cyan-400" />
+          {columns.length} Colunas Personalizáveis
+        </span>
+        <div className="flex items-center space-x-2">
+          <button onClick={() => handleScroll('left')} className="p-1.5 bg-slate-900 border border-slate-800 rounded-lg text-slate-300 hover:bg-slate-800">
+            <ChevronLeft size={16} />
+          </button>
+          <button onClick={() => handleScroll('right')} className="p-1.5 bg-slate-900 border border-slate-800 rounded-lg text-slate-300 hover:bg-slate-800">
+            <ChevronRight size={16} />
+          </button>
+        </div>
+      </div>
+
+      <div ref={scrollContainerRef} className="flex space-x-4 flex-1 items-start overflow-x-auto pb-4 custom-scrollbar snap-x">
+        {columns.map(col => {
+          const columnCards = cards.filter(c => c.status === col.id);
+          return (
+            <div 
+              key={col.id} 
+              className={`flex-shrink-0 w-80 sm:w-[330px] rounded-2xl border flex flex-col max-h-full ${col.color || 'bg-slate-900/80 border-slate-800'} backdrop-blur-xl shadow-2xl snap-start group/col`}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (draggedCardId) onUpdateStatus(draggedCardId, col.id);
+                setDraggedCardId(null);
+              }}
+            >
+              <div className="p-3.5 border-b border-slate-800/80 flex justify-between items-center bg-[#070d1e]/80 rounded-t-2xl">
+                <div className="flex items-center space-x-2 min-w-0">
+                  <h3 className="font-bold text-slate-200 tracking-wider text-xs uppercase truncate">{col.label}</h3>
+                  <span className="bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[10px] px-2 py-0.5 rounded-full font-bold">
+                    {columnCards.length}
+                  </span>
+                </div>
+
+                {activeMember.isSystemAdmin && (
+                  <div className="flex items-center space-x-1 opacity-0 group-hover/col:opacity-100 transition-opacity">
+                    <button onClick={() => onEditColumn(col)} className="p-1 text-slate-400 hover:text-white">
+                      <Edit3 size={13} />
+                    </button>
+                    <button onClick={() => onDeleteColumn(col.id)} className="p-1 text-slate-400 hover:text-rose-400">
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                )}
+              </div>
+              
+              <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar min-h-[220px]">
+                {columnCards.map(card => (
+                  <KanbanCard 
+                    key={card.id} 
+                    card={card} 
+                    client={clients.find(c => c.id === card.clientId)}
+                    members={members}
+                    onClick={() => onCardClick(card)}
+                    onDragStart={() => setDraggedCardId(card.id)}
+                    onToggleTask={onToggleTask}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// --- KANBAN CARD ---
+function KanbanCard({ card, client, members, onClick, onDragStart, onToggleTask }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const checklist = card.checklist || [];
+  const totalTasks = checklist.length;
+  const completedTasks = checklist.filter(t => t.done).length;
+  const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+  const isOverdue = card.deadlineFinal && new Date(card.deadlineFinal) < new Date() && card.status !== 'concluido';
+
+  return (
+    <div 
+      draggable 
+      onDragStart={onDragStart}
+      className="bg-[#0e1738] border border-slate-700/60 hover:border-cyan-500/60 rounded-2xl p-4 shadow-xl cursor-pointer space-y-3 transition-all group"
+    >
+      <div onClick={onClick} className="space-y-2">
+        <div className="flex justify-between items-center bg-[#070c1e] px-2.5 py-1.5 rounded-xl border border-slate-800">
+          <div className="flex items-center space-x-2 min-w-0">
+            {client?.logoUrl ? (
+              <img src={client.logoUrl} alt={client.name} className="w-5 h-5 rounded object-cover border border-slate-700" />
+            ) : (
+              <Building2 size={14} className="text-cyan-400 shrink-0" />
+            )}
+            <span className="font-black text-xs text-cyan-300 uppercase tracking-wide truncate">
+              {client?.name || 'Cliente Não Vinculado'}
+            </span>
+          </div>
+          {isOverdue && (
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center gap-1 shrink-0">
+              <Clock size={10} /> Atrasado
+            </span>
+          )}
+        </div>
+
+        <h4 className="font-bold text-slate-100 text-sm leading-snug group-hover:text-cyan-300 transition-colors">
+          {card.title}
+        </h4>
+
+        {(card.tags || []).length > 0 && (
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {card.tags.map(tagId => {
+              const tag = PRESET_TAGS.find(t => t.id === tagId);
+              return tag ? (
+                <span key={tagId} className={`text-[10px] px-2 py-0.5 rounded-md border font-bold ${tag.color}`}>
+                  {tag.name}
+                </span>
+              ) : null;
+            })}
+          </div>
+        )}
+      </div>
+
+      {totalTasks > 0 && (
+        <div className="border-t border-slate-800 pt-2">
+          <button 
+            type="button" 
+            onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}
+            className="w-full flex justify-between items-center text-[11px] text-slate-400 hover:text-slate-200"
+          >
+            <span className="flex items-center space-x-1.5 font-bold">
+              <CheckSquare size={13} className="text-cyan-400" />
+              <span>{completedTasks}/{totalTasks} tarefas concluídas</span>
+            </span>
+            <span className="font-mono font-bold text-cyan-300">{progress}%</span>
+          </button>
+
+          <div className="w-full bg-slate-900 h-1.5 rounded-full mt-1.5 overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-cyan-500 to-blue-500" style={{ width: `${progress}%` }}></div>
+          </div>
+
+          {isExpanded && (
+            <div className="mt-2 space-y-1.5 pt-2 border-t border-slate-800 max-h-40 overflow-y-auto custom-scrollbar">
+              {checklist.map(task => {
+                const assignedMem = members.find(m => m.name === task.assignee);
+                return (
+                  <div key={task.id} className="flex items-center justify-between text-xs py-1 px-1.5 rounded hover:bg-white/5">
+                    <label className="flex items-center space-x-2 cursor-pointer flex-1 min-w-0">
+                      <input 
+                        type="checkbox" 
+                        checked={task.done} 
+                        onChange={() => onToggleTask(card.id, task.id)}
+                        className="w-3.5 h-3.5 rounded text-cyan-600 focus:ring-0" 
+                      />
+                      <span className={`truncate text-[11px] ${task.done ? 'line-through text-slate-500' : 'text-slate-200'}`}>
+                        {task.text}
+                      </span>
+                    </label>
+                    <MemberAvatar name={task.assignee} avatarUrl={assignedMem?.avatarUrl} size="w-5 h-5" />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- RESPONSIBILITIES VIEW ---
+function ResponsibilitiesView({ cards, clients, members, activeMember, onCardClick, onToggleTask }) {
+  const displayMembers = activeMember.isSystemAdmin
+    ? members 
+    : members.filter(m => m.name === activeMember.name);
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {displayMembers.map(member => {
+          const assignedTasks = [];
+
+          cards.forEach(c => {
+            if (c.status !== 'concluido') {
+              (c.checklist || []).forEach(t => {
+                if (t.assignee === member.name && !t.done) {
+                  assignedTasks.push({ ...t, cardTitle: c.title, card: c });
+                }
+              });
+            }
+          });
+
+          return (
+            <div key={member.id} className="bg-[#0a1128]/80 border border-slate-800 rounded-2xl p-4 space-y-4 shadow-xl">
+              <div className="flex items-center space-x-3 border-b border-slate-800 pb-3">
+                <MemberAvatar name={member.name} avatarUrl={member.avatarUrl} size="w-10 h-10" />
+                <div>
+                  <h4 className="font-bold text-slate-100 text-sm">{member.name}</h4>
+                  <p className="text-[11px] text-cyan-400">{member.role}</p>
+                </div>
+              </div>
+
+              <div>
+                <h5 className="text-[11px] font-bold uppercase text-amber-400 mb-2">Tarefas Pendentes ({assignedTasks.length})</h5>
+                <div className="space-y-2 max-h-80 overflow-y-auto custom-scrollbar">
+                  {assignedTasks.length === 0 ? (
+                    <p className="text-xs text-slate-500 italic p-2">Nenhuma tarefa pendente no momento.</p>
+                  ) : (
+                    assignedTasks.map(task => (
+                      <div key={task.id} className="bg-[#070c1e] p-2.5 rounded-xl border border-slate-800 text-xs space-y-1.5">
+                        <div className="flex justify-between items-start">
+                          <span className="font-semibold text-slate-200">{task.text}</span>
+                          <input type="checkbox" checked={false} onChange={() => onToggleTask(task.card.id, task.id)} className="rounded cursor-pointer" />
+                        </div>
+                        <button 
+                          onClick={() => onCardClick(task.card)} 
+                          className="text-[10px] text-cyan-300 hover:underline font-mono block truncate"
+                        >
+                          📍 {task.cardTitle}
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// --- FINANCIAL ADMIN DASHBOARD ---
+function FinancialAdminDashboard({ cards, clients, onCardClick }) {
+  const stats = useMemo(() => {
+    let totalAgreed = 0;
+    let totalReceived = 0;
+
+    cards.forEach(card => {
+      const cardTotal = parseFloat(card.financialTotal || 0);
+      const cardPaid = (card.payments || []).reduce((acc, p) => acc + parseFloat(p.amount || 0), 0);
+      totalAgreed += cardTotal;
+      totalReceived += cardPaid;
+    });
+
+    return {
+      totalAgreed,
+      totalReceived,
+      pendingBalance: Math.max(0, totalAgreed - totalReceived)
+    };
+  }, [cards]);
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-[#0a1128] border border-slate-800 rounded-2xl p-5 shadow-xl">
+          <span className="text-xs font-bold text-slate-400 uppercase">Faturamento Total Contratado</span>
+          <h3 className="text-2xl font-black text-slate-100 mt-1">R$ {stats.totalAgreed.toLocaleString('pt-BR')}</h3>
+        </div>
+        <div className="bg-[#0a1128] border border-emerald-500/30 rounded-2xl p-5 shadow-xl">
+          <span className="text-xs font-bold text-emerald-400 uppercase">Total Efetivamente Recebido</span>
+          <h3 className="text-2xl font-black text-emerald-400 mt-1">R$ {stats.totalReceived.toLocaleString('pt-BR')}</h3>
+        </div>
+        <div className="bg-[#0a1128] border border-rose-500/30 rounded-2xl p-5 shadow-xl">
+          <span className="text-xs font-bold text-rose-400 uppercase">Saldo Devedor Geral</span>
+          <h3 className="text-2xl font-black text-rose-300 mt-1">R$ {stats.pendingBalance.toLocaleString('pt-BR')}</h3>
+        </div>
+      </div>
+
+      <div className="bg-[#0a1128] border border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl">
+        <h3 className="font-bold text-slate-100 text-sm">Resumo Geral de Todos os Projetos</h3>
+        <div className="space-y-2">
+          {cards.map(card => {
+            const total = parseFloat(card.financialTotal || 0);
+            const paid = (card.payments || []).reduce((acc, p) => acc + parseFloat(p.amount || 0), 0);
+            const client = clients.find(c => c.id === card.clientId);
+            return (
+              <div key={card.id} className="bg-[#070c1e] p-3 rounded-xl border border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center text-xs gap-2">
+                <div>
+                  <div className="font-bold text-cyan-300">{client?.name || 'Cliente Sem Nome'} - {card.title}</div>
+                  <div className="text-[10px] text-slate-400 font-mono">
+                    Total: R$ {total.toLocaleString('pt-BR')} | Recebido: R$ {paid.toLocaleString('pt-BR')} | Restante: R$ {(total - paid).toLocaleString('pt-BR')}
+                  </div>
+                </div>
+                <button onClick={() => onCardClick(card)} className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg font-bold text-[11px]">
+                  Gerenciar Finanças
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- FINANCIAL OPS DASHBOARD ---
+function FinancialOpsDashboard({ cards, clients, onCardClick }) {
+  return (
+    <div className="space-y-6">
+      <div className="bg-[#0a1128] border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+        <h3 className="font-bold text-slate-100 text-sm">Controle Operacional de Pagamentos por Cliente</h3>
+        <div className="space-y-4">
+          {cards.map(card => {
+            const total = parseFloat(card.financialTotal || 0);
+            const payments = card.payments || [];
+            const paid = payments.reduce((acc, p) => acc + parseFloat(p.amount || 0), 0);
+            const remaining = total - paid;
+            const client = clients.find(c => c.id === card.clientId);
+
+            return (
+              <div key={card.id} className="bg-[#070c1e] p-4 rounded-xl border border-slate-800 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-2">
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <span className="font-black text-sm text-cyan-300 uppercase">{client?.name || 'Cliente Não Informado'}</span>
+                      <span className="text-xs text-slate-400 font-mono">({card.title})</span>
+                    </div>
+                  </div>
+                  <button onClick={() => onCardClick(card)} className="bg-cyan-600 hover:bg-cyan-500 text-white px-3 py-1.5 rounded-lg font-bold text-xs">
+                    + Lançar Pagamento
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 text-xs font-mono bg-slate-900/60 p-2.5 rounded-lg border border-slate-800">
+                  <div>
+                    <span className="text-slate-400 block text-[10px]">VALOR TOTAL</span>
+                    <span className="text-slate-200 font-bold">R$ {total.toLocaleString('pt-BR')}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px]">TOTAL PAGO</span>
+                    <span className="text-emerald-400 font-bold">R$ {paid.toLocaleString('pt-BR')}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px]">SALDO DEVEDOR</span>
+                    <span className={remaining > 0 ? 'text-rose-400 font-bold' : 'text-emerald-400 font-bold'}>
+                      R$ {remaining.toLocaleString('pt-BR')}
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <h5 className="text-[11px] font-bold text-slate-400 uppercase mb-1">Histórico de Lançamentos:</h5>
+                  {payments.length === 0 ? (
+                    <p className="text-[11px] text-slate-500 italic">Nenhum pagamento registrado.</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {payments.map(p => (
+                        <div key={p.id} className="flex justify-between items-center text-xs font-mono bg-slate-950 p-2 rounded border border-slate-800">
+                          <span className="text-slate-400">Data: {p.date}</span>
+                          <span className="text-emerald-400 font-bold">R$ {parseFloat(p.amount).toLocaleString('pt-BR')}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- CLIENTS VIEW ---
+function ClientsView({ clients, onEditClient, onDeleteClient }) {
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {clients.map(client => (
+          <div key={client.id} className="bg-[#0a1128] border border-slate-800 rounded-2xl p-4 space-y-3 shadow-xl">
+            <div className="flex justify-between items-start">
+              <div className="flex items-center space-x-3">
+                {client.logoUrl ? (
+                  <img src={client.logoUrl} alt={client.name} className="w-12 h-12 rounded-xl object-cover border border-slate-800" />
+                ) : (
+                  <div className="w-12 h-12 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center font-bold text-cyan-400">
+                    <Building2 size={22} />
+                  </div>
+                )}
+                <div>
+                  <h4 className="font-bold text-slate-100 text-sm">{client.name}</h4>
+                  <p className="text-xs text-slate-400 font-mono">{client.cnpj || 'Sem CNPJ'}</p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-1">
+                <button onClick={() => onEditClient(client)} className="p-1.5 text-slate-400 hover:text-white">
+                  <Edit3 size={16} />
+                </button>
+                <button onClick={() => onDeleteClient(client.id)} className="p-1.5 text-slate-400 hover:text-rose-400">
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-300 space-y-1 border-t border-slate-800 pt-2">
+              <div>📍 <span className="text-slate-400">{client.address || 'Endereço não informado'}</span></div>
+              <div className="grid grid-cols-2 gap-1 text-[11px] font-mono text-cyan-300 pt-1">
+                <div>Área: {client.projectArea ? `${client.projectArea} m²` : 'N/A'}</div>
+                <div>Aprovado: #{client.approvedProjectNo || 'N/A'}</div>
+                <div>CLCB/AVCB: #{client.clcbAvcbNo || 'N/A'}</div>
+                <div>Validade: {client.clcbExpirationDate || 'N/A'}</div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// --- MEMBERS VIEW ---
+function MembersView({ members, activeMember, onEditMember, onDeleteMember }) {
+  const [showPins, setShowPins] = useState({});
+
+  const togglePinShow = (id) => {
+    setShowPins(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {members.map(member => (
+          <div key={member.id} className="bg-[#0a1128] border border-slate-800 rounded-2xl p-4 space-y-3 shadow-xl">
+            <div className="flex justify-between items-start">
+              <div className="flex items-center space-x-3">
+                <MemberAvatar name={member.name} avatarUrl={member.avatarUrl} size="w-12 h-12" textSize="text-base" />
+                <div>
+                  <h4 className="font-bold text-slate-100 text-sm flex items-center gap-1.5">
+                    <span>{member.name}</span>
+                    {member.isSystemAdmin && <Shield size={14} className="text-amber-400" />}
+                  </h4>
+                  <p className="text-xs text-cyan-400">{member.role}</p>
+                </div>
+              </div>
+              {activeMember.isSystemAdmin && (
+                <div className="flex items-center space-x-1">
+                  <button onClick={() => onEditMember(member)} className="p-1.5 text-slate-400 hover:text-white">
+                    <Edit3 size={16} />
+                  </button>
+                  {member.id !== activeMember.id && (
+                    <button onClick={() => onDeleteMember(member.id)} className="p-1.5 text-slate-400 hover:text-rose-400">
+                      <Trash2 size={16} />
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="text-xs text-slate-400 font-mono space-y-1.5 border-t border-slate-800 pt-2">
+              <div>E-mail: {member.email || 'N/A'}</div>
+              
+              <div className="flex justify-between items-center bg-slate-950 p-1.5 rounded border border-slate-800">
+                <span>PIN: {showPins[member.id] ? member.pin : '****'}</span>
+                <button onClick={() => togglePinShow(member.id)} className="text-slate-400 hover:text-white p-1">
+                  {showPins[member.id] ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
+
+              <div className="text-[10px] text-cyan-300 pt-1 space-y-0.5">
+                <div>Permissões Ativas:</div>
+                <div className="flex flex-wrap gap-1 pt-1">
+                  {member.canAccessKanban && <span className="px-1.5 py-0.5 bg-slate-800 text-slate-300 rounded">Kanban</span>}
+                  {member.canAccessResponsibilities && <span className="px-1.5 py-0.5 bg-slate-800 text-slate-300 rounded">Tarefas</span>}
+                  {member.canAccessFinancialAdmin && <span className="px-1.5 py-0.5 bg-emerald-950 text-emerald-300 rounded">Fin. Master</span>}
+                  {member.canAccessFinancialOps && <span className="px-1.5 py-0.5 bg-cyan-950 text-cyan-300 rounded">Fin. Ops</span>}
+                  {member.canAccessClients && <span className="px-1.5 py-0.5 bg-slate-800 text-slate-300 rounded">Clientes</span>}
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// --- COLUMN MODAL ---
+function ColumnModal({ column, onClose, onSave }) {
+  const [formData, setFormData] = useState(column || { label: '', color: 'bg-slate-900/80 border-slate-800' });
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave(formData);
+  };
+
+  return (
+    <ModalWrapper isOpen={true} onClose={onClose} title={column ? "Editar Coluna do Kanban" : "Nova Coluna no Kanban"}>
+      <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <InputField label="Nome da Coluna" value={formData.label} onChange={e => setFormData({ ...formData, label: e.target.value })} required />
+        <div className="flex justify-end space-x-3 pt-4 border-t border-slate-800">
+          <button type="button" onClick={onClose} className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-bold">Cancelar</button>
+          <button type="submit" className="px-5 py-2 bg-cyan-600 text-white rounded-xl text-xs font-bold">Salvar Coluna</button>
+        </div>
+      </form>
+    </ModalWrapper>
+  );
+}
+
+// --- INPUT FIELD HELPER ---
+function InputField({ label, type = "text", value, onChange, placeholder, required }) {
+  return (
+    <div className="flex flex-col space-y-1.5">
+      <label className="text-xs font-bold text-slate-300 uppercase tracking-wide">{label}</label>
+      <input 
+        type={type} 
+        value={value || ''} 
+        onChange={onChange}
+        placeholder={placeholder}
+        required={required}
+        className="bg-slate-950 border border-slate-800 text-slate-100 text-sm rounded-xl p-2.5 outline-none focus:border-cyan-500"
+      />
+    </div>
+  );
+}
+
+// --- MEMBER MODAL ---
+function MemberModal({ member, activeMember, onClose, onSave }) {
+  const [formData, setFormData] = useState(member || {
+    name: '', role: '', cpf: '', rg: '', pix: '', email: '', phone: '', avatarUrl: '', pin: '0000',
+    canAccessKanban: true, canAccessResponsibilities: true,
+    canAccessFinancialAdmin: false, canAccessFinancialOps: false,
+    canAccessClients: true, canAccessMembers: false, isSystemAdmin: false
+  });
+
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const base64 = await convertFileToBase64(file);
+      setFormData({ ...formData, avatarUrl: base64 });
+    }
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave(formData);
+  };
+
+  return (
+    <ModalWrapper isOpen={true} onClose={onClose} title={member ? "Editar Membro da Equipe" : "Novo Cadastro de Membro"}>
+      <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <div className="flex items-center space-x-4 border-b border-slate-800 pb-4">
+          <MemberAvatar name={formData.name || '?'} avatarUrl={formData.avatarUrl} size="w-16 h-16" textSize="text-2xl" />
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-cyan-300 cursor-pointer bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-xl border border-slate-700 inline-block">
+              Upload Foto
+              <input type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
+            </label>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <InputField label="Nome Completo" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required />
+          <InputField label="Cargo / Função" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})} />
+          <InputField label="E-mail (Login)" type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} required />
+          <InputField label="PIN (Senha de 4 dígitos)" type="password" value={formData.pin} onChange={e => setFormData({...formData, pin: e.target.value})} required />
+          <InputField label="CPF" value={formData.cpf} onChange={e => setFormData({...formData, cpf: e.target.value})} />
+          <InputField label="Chave PIX" value={formData.pix} onChange={e => setFormData({...formData, pix: e.target.value})} />
+        </div>
+        
+        {activeMember.isSystemAdmin && (
+          <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-3">
+            <span className="text-xs font-bold text-amber-400 uppercase block">Controle de Acesso aos Painéis:</span>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <label className="flex items-center space-x-2 text-slate-300 cursor-pointer">
+                <input type="checkbox" checked={formData.canAccessKanban} onChange={e => setFormData({...formData, canAccessKanban: e.target.checked})} className="rounded" />
+                <span>Painel Kanban</span>
+              </label>
+              <label className="flex items-center space-x-2 text-slate-300 cursor-pointer">
+                <input type="checkbox" checked={formData.canAccessResponsibilities} onChange={e => setFormData({...formData, canAccessResponsibilities: e.target.checked})} className="rounded" />
+                <span>Responsabilidades</span>
+              </label>
+              <label className="flex items-center space-x-2 text-slate-300 cursor-pointer">
+                <input type="checkbox" checked={formData.canAccessFinancialAdmin} onChange={e => setFormData({...formData, canAccessFinancialAdmin: e.target.checked})} className="rounded" />
+                <span className="text-emerald-400">Financeiro Geral (Master)</span>
+              </label>
+              <label className="flex items-center space-x-2 text-slate-300 cursor-pointer">
+                <input type="checkbox" checked={formData.canAccessFinancialOps} onChange={e => setFormData({...formData, canAccessFinancialOps: e.target.checked})} className="rounded" />
+                <span className="text-cyan-400">Financeiro Operacional</span>
+              </label>
+              <label className="flex items-center space-x-2 text-slate-300 cursor-pointer">
+                <input type="checkbox" checked={formData.canAccessClients} onChange={e => setFormData({...formData, canAccessClients: e.target.checked})} className="rounded" />
+                <span>Clientes Cadastrados</span>
+              </label>
+              <label className="flex items-center space-x-2 text-slate-300 cursor-pointer">
+                <input type="checkbox" checked={formData.isSystemAdmin} onChange={e => setFormData({...formData, isSystemAdmin: e.target.checked})} className="rounded" />
+                <span className="font-bold text-amber-300">Acesso Geral Master</span>
+              </label>
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-end space-x-3 pt-4 border-t border-slate-800">
+          <button type="button" onClick={onClose} className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-bold">Cancelar</button>
+          <button type="submit" className="px-5 py-2 bg-cyan-600 text-white rounded-xl text-xs font-bold">Salvar Membro</button>
+        </div>
+      </form>
+    </ModalWrapper>
+  );
+}
+
+// --- CLIENT MODAL ---
+function ClientModal({ client, onClose, onSave }) {
+  const [formData, setFormData] = useState(client || { 
+    name: '', cnpj: '', address: '', logoUrl: '',
+    projectArea: '', approvedProjectNo: '', clcbAvcbNo: '', clcbExpirationDate: ''
+  });
+
+  const handleLogoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const base64 = await convertFileToBase64(file);
+      setFormData({ ...formData, logoUrl: base64 });
+    }
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave(formData);
+  };
+
+  return (
+    <ModalWrapper isOpen={true} onClose={onClose} title={client ? "Editar Cliente" : "Novo Cliente"}>
+      <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <div className="flex items-center space-x-4 border-b border-slate-800 pb-4">
+          {formData.logoUrl ? (
+            <img src={formData.logoUrl} alt="Logo" className="w-16 h-16 rounded-2xl object-cover border border-slate-800" />
+          ) : (
+            <div className="w-16 h-16 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center font-bold text-cyan-400">
+              <Building2 size={28} />
+            </div>
+          )}
+          <div className="space-y-1">
+            <label className="text-xs font-bold text-cyan-300 cursor-pointer bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-xl border border-slate-700 inline-block">
+              Upload Logotipo
+              <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
+            </label>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <InputField label="Nome / Razão Social" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required />
+          <InputField label="CNPJ" value={formData.cnpj} onChange={e => setFormData({...formData, cnpj: e.target.value})} />
+          <InputField label="Endereço Completo" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
+          <InputField label="Área do Projeto (m²)" value={formData.projectArea} onChange={e => setFormData({...formData, projectArea: e.target.value})} />
+          <InputField label="Nº do Projeto Aprovado" value={formData.approvedProjectNo} onChange={e => setFormData({...formData, approvedProjectNo: e.target.value})} />
+          <InputField label="Nº do CLCB/AVCB" value={formData.clcbAvcbNo} onChange={e => setFormData({...formData, clcbAvcbNo: e.target.value})} />
+          <InputField label="Validade CLCB/AVCB" type="date" value={formData.clcbExpirationDate} onChange={e => setFormData({...formData, clcbExpirationDate: e.target.value})} />
+        </div>
+
+        <div className="flex justify-end space-x-3 pt-4 border-t border-slate-800">
+          <button type="button" onClick={onClose} className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-bold">Cancelar</button>
+          <button type="submit" className="px-5 py-2 bg-cyan-600 text-white rounded-xl text-xs font-bold">Salvar Cliente</button>
+        </div>
+      </form>
+    </ModalWrapper>
+  );
+}
+
+// --- CARD MODAL ---
+function CardModal({ card, clients, members, columns, onClose, onSave, onDelete, activeTab, setActiveTab, setLightboxImage }) {
+  const [formData, setFormData] = useState(card || {
+    title: '', clientId: '', description: '', notes: '', images: [], tags: [],
+    financialTotal: 0, payments: [], checklist: [], status: columns[0]?.id || 'solicitacoes',
+    deadlineRequest: '', deadlineResponse: '', deadlineIntermediate: '', deadlineFinal: '',
+    currentAssignee: 'Sem Atribuição', nextAssignee: 'Sem Atribuição'
+  });
+
+  const [newPayment, setNewPayment] = useState({ date: '', amount: '' });
+  const [newTaskText, setNewTaskText] = useState('');
+  const [newTaskAssignee, setNewTaskAssignee] = useState(members[0]?.name || '');
+
+  const handleImageUpload = async (e) => {
+    const files = Array.from(e.target.files || []);
+    for (let file of files) {
+      const base64 = await convertFileToBase64(file);
+      setFormData(prev => ({ ...prev, images: [...(prev.images || []), base64] }));
+    }
+  };
+
+  const handleAddPayment = () => {
+    if (!newPayment.amount || parseFloat(newPayment.amount) <= 0) return;
+    const paymentObj = {
+      id: `pay_${Date.now()}`,
+      date: newPayment.date || new Date().toISOString().split('T')[0],
+      amount: parseFloat(newPayment.amount)
+    };
+    setFormData(prev => ({ ...prev, payments: [...(prev.payments || []), paymentObj] }));
+    setNewPayment({ date: '', amount: '' });
+  };
+
+  const handleAddTask = () => {
+    if (!newTaskText.trim()) return;
+    const taskObj = {
+      id: `task_${Date.now()}`,
+      text: newTaskText,
+      done: false,
+      assignee: newTaskAssignee
+    };
+    setFormData(prev => ({ ...prev, checklist: [...(prev.checklist || []), taskObj] }));
+    setNewTaskText('');
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave(formData);
+  };
+
+  return (
+    <ModalWrapper isOpen={true} onClose={onClose} title={card ? "Gerenciar Detalhes do Cartão" : "Criar Novo Cartão Kanban"} maxWidth="max-w-4xl">
+      <form id="card-form" onSubmit={handleSubmit} className="flex flex-col md:flex-row min-h-[500px]">
+        <div className="w-full md:w-56 bg-slate-950/60 border-r border-slate-800 p-3 space-y-1">
+          {[
+            { id: 'overview', icon: FileText, label: 'Geral & Prazos' },
+            { id: 'checklist', icon: CheckSquare, label: 'Checklist / Etapas' },
+            { id: 'finance', icon: DollarSign, label: 'Valores / Pagamentos' },
+            { id: 'notes', icon: Paperclip, label: 'Notas & Imagens' },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`w-full flex items-center space-x-2 px-3 py-2.5 rounded-xl text-xs font-bold ${
+                activeTab === tab.id ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' : 'text-slate-400 hover:bg-white/5'
+              }`}
+            >
+              <tab.icon size={15} />
+              <span>{tab.label}</span>
+            </button>
+          ))}
+
+          {card && (
+            <div className="pt-6">
+              <button 
+                type="button" 
+                onClick={() => onDelete(card.id)} 
+                className="w-full flex items-center justify-center space-x-2 px-3 py-2 bg-rose-950/50 hover:bg-rose-900/80 text-rose-300 border border-rose-500/30 rounded-xl text-xs font-bold"
+              >
+                <Trash2 size={14} />
+                <span>Excluir Cartão</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="flex-1 p-6 overflow-y-auto custom-scrollbar bg-[#0a1128]/40">
+          {activeTab === 'overview' && (
+            <div className="space-y-4">
+              <InputField label="Título da Solicitação" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} required />
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="flex flex-col space-y-1.5">
+                  <label className="text-xs font-bold text-cyan-300 uppercase">Cliente Cadastrado</label>
+                  <select 
+                    value={formData.clientId || ''} 
+                    onChange={e => setFormData({...formData, clientId: e.target.value})}
+                    className="bg-slate-950 border border-slate-800 text-slate-100 text-sm rounded-xl p-2.5 outline-none focus:border-cyan-500"
+                    required
+                  >
+                    <option value="" disabled>Selecione o cliente...</option>
+                    {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+
+                <div className="flex flex-col space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300 uppercase">Coluna do Fluxo</label>
+                  <select 
+                    value={formData.status} 
+                    onChange={e => setFormData({...formData, status: e.target.value})}
+                    className="bg-slate-950 border border-slate-800 text-slate-100 text-sm rounded-xl p-2.5 outline-none"
+                  >
+                    {columns.map(col => <option key={col.id} value={col.id}>{col.label}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="flex flex-col space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300 uppercase">Responsável Atual</label>
+                  <select 
+                    value={formData.currentAssignee} 
+                    onChange={e => setFormData({...formData, currentAssignee: e.target.value})}
+                    className="bg-slate-950 border border-slate-800 text-slate-100 text-sm rounded-xl p-2.5 outline-none"
+                  >
+                    <option value="Sem Atribuição">Sem Atribuição</option>
+                    {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                  </select>
+                </div>
+
+                <div className="flex flex-col space-y-1.5">
+                  <label className="text-xs font-bold text-slate-300 uppercase">Responsável Seguinte</label>
+                  <select 
+                    value={formData.nextAssignee} 
+                    onChange={e => setFormData({...formData, nextAssignee: e.target.value})}
+                    className="bg-slate-950 border border-slate-800 text-slate-100 text-sm rounded-xl p-2.5 outline-none"
+                  >
+                    <option value="Sem Atribuição">Sem Atribuição</option>
+                    {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-2xl space-y-3">
+                <h4 className="text-xs font-bold text-cyan-400 uppercase tracking-wide">Gestão de Prazos</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <InputField label="Data de Solicitação" type="date" value={formData.deadlineRequest} onChange={e => setFormData({...formData, deadlineRequest: e.target.value})} />
+                  <InputField label="Prazo de Resposta" type="date" value={formData.deadlineResponse} onChange={e => setFormData({...formData, deadlineResponse: e.target.value})} />
+                  <InputField label="Entrega Intermediária" type="date" value={formData.deadlineIntermediate} onChange={e => setFormData({...formData, deadlineIntermediate: e.target.value})} />
+                  <InputField label="Prazo Final" type="date" value={formData.deadlineFinal} onChange={e => setFormData({...formData, deadlineFinal: e.target.value})} />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-300 uppercase">Etiquetas Coloridas</label>
+                <div className="flex flex-wrap gap-2">
+                  {PRESET_TAGS.map(tag => {
+                    const isSelected = (formData.tags || []).includes(tag.id);
+                    return (
+                      <button
+                        key={tag.id}
+                        type="button"
+                        onClick={() => {
+                          const newTags = isSelected 
+                            ? formData.tags.filter(t => t !== tag.id)
+                            : [...(formData.tags || []), tag.id];
+                          setFormData({ ...formData, tags: newTags });
+                        }}
+                        className={`text-xs px-3 py-1 rounded-xl border font-bold ${
+                          isSelected ? tag.color : 'bg-slate-950 text-slate-500 border-slate-800'
+                        }`}
+                      >
+                        {tag.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'checklist' && (
+            <div className="space-y-4">
+              <div className="flex items-center space-x-2">
+                <input 
+                  type="text" 
+                  value={newTaskText} 
+                  onChange={e => setNewTaskText(e.target.value)}
+                  placeholder="Adicionar nova tarefa..."
+                  className="flex-1 bg-slate-950 border border-slate-800 text-slate-100 text-sm rounded-xl p-2.5 outline-none"
+                />
+                <select
+                  value={newTaskAssignee}
+                  onChange={e => setNewTaskAssignee(e.target.value)}
+                  className="bg-slate-950 border border-slate-800 text-slate-100 text-xs rounded-xl p-2.5 outline-none"
+                >
+                  {members.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                </select>
+                <button 
+                  type="button" 
+                  onClick={handleAddTask} 
+                  className="px-4 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-bold"
+                >
+                  Adicionar
+                </button>
+              </div>
+
+              <div className="space-y-2 pt-2">
+                {(formData.checklist || []).map(task => {
+                  const assignedMem = members.find(m => m.name === task.assignee);
+                  return (
+                    <div key={task.id} className="flex items-center justify-between p-2.5 bg-slate-950 rounded-xl border border-slate-800 text-xs">
+                      <label className="flex items-center space-x-3 cursor-pointer flex-1">
+                        <input 
+                          type="checkbox" 
+                          checked={task.done} 
+                          onChange={() => {
+                            const updated = formData.checklist.map(t => t.id === task.id ? { ...t, done: !t.done } : t);
+                            setFormData({ ...formData, checklist: updated });
+                          }} 
+                          className="rounded text-cyan-600"
+                        />
+                        <span className={task.done ? 'line-through text-slate-500' : 'text-slate-200 font-medium'}>
+                          {task.text}
+                        </span>
+                      </label>
+                      <div className="flex items-center space-x-2">
+                        <MemberAvatar name={task.assignee} avatarUrl={assignedMem?.avatarUrl} size="w-6 h-6" />
+                        <button 
+                          type="button" 
+                          onClick={() => {
+                            const updated = formData.checklist.filter(t => t.id !== task.id);
+                            setFormData({ ...formData, checklist: updated });
+                          }}
+                          className="text-slate-500 hover:text-rose-400 p-1"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'finance' && (
+            <div className="space-y-4">
+              <InputField 
+                label="Valor Acordado Total (R$)" 
+                type="number" 
+                value={formData.financialTotal} 
+                onChange={e => setFormData({...formData, financialTotal: e.target.value})} 
+              />
+
+              <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-2xl space-y-3">
+                <h4 className="text-xs font-bold text-emerald-400 uppercase">Lançar Pagamento Recebido</h4>
+                <div className="flex items-center space-x-2">
+                  <input 
+                    type="date" 
+                    value={newPayment.date} 
+                    onChange={e => setNewPayment({...newPayment, date: e.target.value})}
+                    className="bg-slate-900 border border-slate-800 text-slate-100 text-xs rounded-xl p-2 outline-none"
+                  />
+                  <input 
+                    type="number" 
+                    placeholder="Valor (R$)" 
+                    value={newPayment.amount} 
+                    onChange={e => setNewPayment({...newPayment, amount: e.target.value})}
+                    className="flex-1 bg-slate-900 border border-slate-800 text-slate-100 text-xs rounded-xl p-2 outline-none"
+                  />
+                  <button 
+                    type="button" 
+                    onClick={handleAddPayment} 
+                    className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold"
+                  >
+                    Registrar
+                  </button>
+                </div>
+
+                <div className="space-y-1.5 pt-2">
+                  {(formData.payments || []).map(p => (
+                    <div key={p.id} className="flex justify-between items-center p-2 bg-slate-900 rounded-lg text-xs font-mono border border-slate-800">
+                      <span className="text-slate-400">Data: {p.date}</span>
+                      <span className="text-emerald-400 font-bold">R$ {parseFloat(p.amount).toLocaleString('pt-BR')}</span>
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          const updated = formData.payments.filter(item => item.id !== p.id);
+                          setFormData({ ...formData, payments: updated });
+                        }} 
+                        className="text-slate-500 hover:text-rose-400"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'notes' && (
+            <div className="space-y-4">
+              <div className="flex flex-col space-y-1.5">
+                <label className="text-xs font-bold text-slate-300 uppercase">Observações Internas</label>
+                <textarea 
+                  rows={4} 
+                  value={formData.notes || ''} 
+                  onChange={e => setFormData({...formData, notes: e.target.value})}
+                  placeholder="Adicione observações importantes sobre o projeto..."
+                  className="bg-slate-950 border border-slate-800 text-slate-100 text-sm rounded-xl p-2.5 outline-none"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-300 uppercase block">Anexar Imagens e Fotos</label>
+                <label className="text-xs font-bold text-cyan-300 cursor-pointer bg-slate-950 hover:bg-slate-900 p-3 rounded-xl border border-slate-800 flex items-center justify-center space-x-2">
+                  <Upload size={16} />
+                  <span>Upload de Arquivos de Imagem</span>
+                  <input type="file" accept="image/*" multiple onChange={handleImageUpload} className="hidden" />
+                </label>
+
+                <div className="grid grid-cols-3 gap-2 pt-2">
+                  {(formData.images || []).map((img, idx) => (
+                    <div key={idx} className="relative group rounded-xl overflow-hidden border border-slate-800 h-24">
+                      <img src={img} alt="Anexo" className="w-full h-full object-cover cursor-pointer" onClick={() => setLightboxImage(img)} />
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          const updated = formData.images.filter((_, i) => i !== idx);
+                          setFormData({ ...formData, images: updated });
+                        }}
+                        className="absolute top-1 right-1 p-1 bg-rose-950/80 text-rose-200 rounded-full hover:bg-rose-900"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </form>
+
+      <div className="flex justify-between items-center p-4 border-t border-slate-800 bg-[#070d1e]">
+        <button type="button" onClick={onClose} className="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-bold rounded-xl">Cancelar</button>
+        <button type="submit" form="card-form" className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-xl">Salvar Cartão</button>
+      </div>
+    </ModalWrapper>
+  );
+}
+
+// Global Custom Scrollbar Styles
+if (typeof document !== 'undefined') {
+  const style = document.createElement('style');
+  style.textContent = `
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 99px; }
+  `;
+  document.head.appendChild(style);
+}
