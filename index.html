@@ -11,16 +11,21 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <!-- Babel para compilar JSX no navegador -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Firebase SDK Compat (para funcionar perfeitamente via script tag) -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <!-- Lucide Icons Global -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   </head>
   <body class="bg-[#070b19] text-slate-100 font-sans antialiased">
     <div id="root"></div>
 
-    <!-- Import do código React como módulo do Babel -->
-    <script type="text/babel" data-type="module" src="./App.jsx"></script>
+    <!-- Script de Inicialização -->
+    <script type="text/babel">
+      // Mapeia os ícones do Lucide globalmente
+      const LucideIcons = window.lucide;
 
-    <script type="text/babel" data-type="module">
       window.addEventListener('load', () => {
         const rootElement = document.getElementById('root');
         if (rootElement && window.App) {
@@ -29,5 +34,8 @@
         }
       });
     </script>
+
+    <!-- Import do App.jsx -->
+    <script type="text/babel" src="./App.jsx"></script>
   </body>
 </html>
