@@ -15,24 +15,23 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-    <!-- Lucide Icons Global -->
-    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
   </head>
   <body class="bg-[#070b19] text-slate-100 font-sans antialiased">
     <div id="root"></div>
 
-    <!-- 1. Carrega o ficheiro do App primeiro -->
-    <script type="text/babel" src="./App.jsx"></script>
-
-    <!-- 2. Inicializa e renderiza imediatamente a aplicação -->
+    <!-- Script que inicializa o App do Canvas -->
     <script type="text/babel">
-      const LucideIcons = window.lucide;
-      
-      const rootElement = document.getElementById('root');
-      if (rootElement && window.App) {
-        const root = ReactDOM.createRoot(rootElement);
-        root.render(React.createElement(window.App));
-      }
+      window.addEventListener('DOMContentLoaded', () => {
+        if (window.App) {
+          const root = ReactDOM.createRoot(document.getElementById('root'));
+          root.render(React.createElement(window.App));
+        }
+      });
     </script>
+
+    <!-- Import do seu App.jsx -->
+    <script type="text/babel" src="./App.jsx"></script>
   </body>
 </html>
