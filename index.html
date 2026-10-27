@@ -11,7 +11,7 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <!-- Babel para compilar JSX no navegador -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- Firebase SDK Compat (para funcionar perfeitamente via script tag) -->
+    <!-- Firebase SDK Compat -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
@@ -21,21 +21,18 @@
   <body class="bg-[#070b19] text-slate-100 font-sans antialiased">
     <div id="root"></div>
 
-    <!-- Script de Inicialização -->
-    <script type="text/babel">
-      // Mapeia os ícones do Lucide globalmente
-      const LucideIcons = window.lucide;
-
-      window.addEventListener('load', () => {
-        const rootElement = document.getElementById('root');
-        if (rootElement && window.App) {
-          const root = ReactDOM.createRoot(rootElement);
-          root.render(React.createElement(window.App));
-        }
-      });
-    </script>
-
-    <!-- Import do App.jsx -->
+    <!-- 1. Carrega o ficheiro do App primeiro -->
     <script type="text/babel" src="./App.jsx"></script>
+
+    <!-- 2. Inicializa e renderiza imediatamente a aplicação -->
+    <script type="text/babel">
+      const LucideIcons = window.lucide;
+      
+      const rootElement = document.getElementById('root');
+      if (rootElement && window.App) {
+        const root = ReactDOM.createRoot(rootElement);
+        root.render(React.createElement(window.App));
+      }
+    </script>
   </body>
 </html>
