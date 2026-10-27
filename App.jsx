@@ -1,4 +1,5 @@
 const { useState, useEffect, useRef, useMemo } = React;
+const LucideIcons = window.lucide;
 
 // --- FIREBASE INITIALIZATION ---
 const firebaseConfig = {
@@ -12,25 +13,23 @@ const firebaseConfig = {
 
 let app, auth, db;
 try {
-  if (window.firebase && window.firebase.initializeApp) {
+  if (window.firebase) {
     app = window.firebase.initializeApp(firebaseConfig);
-    auth = window.firebase.auth(app);
-    db = window.firebase.firestore(app);
+    auth = window.firebase.auth();
+    db = window.firebase.firestore();
   }
 } catch (e) {
-  console.warn("Firebase fallback initialized.");
+  console.warn("Firebase initialized via fallback.");
 }
 
 const appId = 'trazo-workspace-v1';
 
-// LocalStorage Persistence Keys
 const LOCAL_STORAGE_CLIENTS_KEY = 'trazo_clients_v1';
 const LOCAL_STORAGE_CARDS_KEY = 'trazo_cards_v1';
 const LOCAL_STORAGE_MEMBERS_KEY = 'trazo_members_v1';
 const LOCAL_STORAGE_ACTIVE_USER_KEY = 'trazo_active_user_v1';
 const LOCAL_STORAGE_COLUMNS_KEY = 'trazo_columns_v1';
 
-// --- CONSTANTS ---
 const DEFAULT_COLUMNS = [
   { id: 'solicitacoes', label: 'Solicitações', color: 'bg-slate-900/80 border-slate-700' },
   { id: 'elaboracao', label: 'Em Elaboração', color: 'bg-blue-950/50 border-blue-800/60' },
@@ -211,11 +210,7 @@ function App() {
     if (!auth) return;
     const initAuth = async () => {
       try {
-        if (typeof window.firebaseAuthToken !== 'undefined' && window.firebaseAuthToken) {
-          await window.firebase.auth().signInWithCustomToken(auth, window.firebaseAuthToken);
-        } else {
-          await auth.signInAnonymously();
-        }
+        await auth.signInAnonymously();
       } catch (error) {}
     };
     initAuth();
@@ -229,21 +224,21 @@ function App() {
   useEffect(() => {
     if (!user || !db) return;
 
-    const membersRef = window.firebase.firestore().collection(db, 'artifacts', appId, 'users', user.uid, 'members');
-    const clientsRef = window.firebase.firestore().collection(db, 'artifacts', appId, 'users', user.uid, 'clients');
-    const cardsRef = window.firebase.firestore().collection(db, 'artifacts', appId, 'users', user.uid, 'cards');
+    const membersRef = db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('members');
+    const clientsRef = db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('clients');
+    const cardsRef = db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('cards');
 
-    const unsubMembers = window.firebase.firestore().onSnapshot(membersRef, (snapshot) => {
+    const unsubMembers = membersRef.onSnapshot((snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       if (data.length > 0) setMembers(data);
     }, (e) => {});
 
-    const unsubClients = window.firebase.firestore().onSnapshot(clientsRef, (snapshot) => {
+    const unsubClients = clientsRef.onSnapshot((snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       if (data.length > 0) setClients(data);
     }, (e) => {});
 
-    const unsubCards = window.firebase.firestore().onSnapshot(cardsRef, (snapshot) => {
+    const unsubCards = cardsRef.onSnapshot((snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       if (data.length > 0) setCards(data);
     }, (e) => {});
@@ -321,7 +316,7 @@ function App() {
 
     if (user && db) {
       try {
-        await window.firebase.firestore().setDoc(window.firebase.firestore().doc(db, 'artifacts', appId, 'users', user.uid, 'members', memberId), memberToSave, { merge: true });
+        await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('members').doc(memberId).set(memberToSave, { merge: true });
       } catch (error) {}
     }
   };
@@ -336,7 +331,7 @@ function App() {
 
     if (user && db) {
       try {
-        await window.firebase.firestore().deleteDoc(window.firebase.firestore().doc(db, 'artifacts', appId, 'users', user.uid, 'members', memberId));
+        await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('members').doc(memberId).delete();
       } catch (e) {}
     }
   };
@@ -357,7 +352,7 @@ function App() {
 
     if (user && db) {
       try {
-        await window.firebase.firestore().setDoc(window.firebase.firestore().doc(db, 'artifacts', appId, 'users', user.uid, 'clients', clientId), clientToSave, { merge: true });
+        await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('clients').doc(clientId).set(clientToSave, { merge: true });
       } catch (error) {}
     }
   };
@@ -368,7 +363,7 @@ function App() {
 
     if (user && db) {
       try {
-        await window.firebase.firestore().deleteDoc(window.firebase.firestore().doc(db, 'artifacts', appId, 'users', user.uid, 'clients', clientId));
+        await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('clients').doc(clientId).delete();
       } catch (e) {}
     }
   };
@@ -401,7 +396,7 @@ function App() {
 
     if (user && db) {
       try {
-        await window.firebase.firestore().setDoc(window.firebase.firestore().doc(db, 'artifacts', appId, 'users', user.uid, 'cards', cardId), cardToSave, { merge: true });
+        await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('cards').doc(cardId).set(cardToSave, { merge: true });
       } catch (error) {}
     }
   };
@@ -419,7 +414,7 @@ function App() {
 
     if (user && db && updatedCard) {
       try {
-        await window.firebase.firestore().updateDoc(window.firebase.firestore().doc(db, 'artifacts', appId, 'users', user.uid, 'cards', cardId), {
+        await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('cards').doc(cardId).update({
           checklist: updatedCard.checklist,
           updatedAt: new Date().toISOString()
         });
@@ -435,7 +430,7 @@ function App() {
 
     if (user && db) {
       try {
-        await window.firebase.firestore().deleteDoc(window.firebase.firestore().doc(db, 'artifacts', appId, 'users', user.uid, 'cards', cardId));
+        await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('cards').doc(cardId).delete();
       } catch (e) {}
     }
   };
@@ -445,7 +440,7 @@ function App() {
     
     if (user && db) {
       try {
-        await window.firebase.firestore().updateDoc(window.firebase.firestore().doc(db, 'artifacts', appId, 'users', user.uid, 'cards', cardId), {
+        await db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('cards').doc(cardId).update({
           status: newStatus,
           updatedAt: new Date().toISOString()
         });
@@ -1871,16 +1866,15 @@ function CardModal({ card, clients, members, columns, onClose, onSave, onDelete,
   );
 }
 
-// Global Custom Scrollbar Styles
 if (typeof document !== 'undefined') {
   const style = document.createElement('style');
   style.textContent = `
-    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: height: 6px; }
     .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 99px; }
   `;
   document.head.appendChild(style);
 }
 
-// Renderização final na página
+// Expõe o App globalmente para o index.html renderizar
 window.App = App;
