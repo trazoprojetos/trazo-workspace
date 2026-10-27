@@ -17,16 +17,17 @@
   <body class="bg-[#070b19] text-slate-100 font-sans antialiased">
     <div id="root"></div>
 
-    <!-- Import do código React -->
-    <script type="text/babel" src="./App.jsx"></script>
+    <!-- Import do código React como módulo do Babel -->
+    <script type="text/babel" data-type="module" src="./App.jsx"></script>
 
-    <script type="text/babel">
-      // Inicialização do React
-      const rootElement = document.getElementById('root');
-      if (rootElement && window.App) {
-        const root = ReactDOM.createRoot(rootElement);
-        root.render(React.createElement(window.App));
-      }
+    <script type="text/babel" data-type="module">
+      window.addEventListener('load', () => {
+        const rootElement = document.getElementById('root');
+        if (rootElement && window.App) {
+          const root = ReactDOM.createRoot(rootElement);
+          root.render(React.createElement(window.App));
+        }
+      });
     </script>
   </body>
 </html>
