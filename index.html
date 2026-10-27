@@ -4,30 +4,70 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Trazo Workspace | Engenharia & Arquitetura</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <!-- React & ReactDOM (UMD) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel Standalone -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
   </head>
-  <body class="bg-[#070b19] text-slate-100 m-0 p-0">
-    <div id="root"></div>
+  <body class="bg-[#070b19] text-slate-100 font-sans m-0 p-0">
+    <div id="root" style="width: 100vw; height: 100vh; background-color: #070b19;"></div>
 
-    <!-- Carrega o script principal -->
-    <script type="text/babel" src="./index.js"></script>
-
-    <!-- Renderiza o App -->
     <script type="text/babel">
-      window.addEventListener('DOMContentLoaded', () => {
-        const rootElement = document.getElementById('root');
-        if (rootElement && window.App) {
-          const root = ReactDOM.createRoot(rootElement);
-          root.render(React.createElement(window.App));
-        }
-      });
+      const { useState } = React;
+      const LucideIcons = window.lucide;
+
+      function App() {
+        const [cards, setCards] = useState([
+          { id: '1', title: 'Projeto de Incêndio - Matriz', status: 'solicitacoes' },
+          { id: '2', title: 'Regularização AVCB - Loja Centro', status: 'elaboracao' }
+        ]);
+
+        return (
+          <div className="min-h-screen bg-[#070b19] text-slate-100 flex flex-col md:flex-row p-6">
+            <aside className="w-full md:w-64 bg-[#0a1128] border border-slate-800 rounded-2xl p-6 mr-6">
+              <h1 className="text-2xl font-serif tracking-widest text-cyan-400">TRAZO</h1>
+              <p className="text-[9px] text-slate-400 tracking-widest uppercase mt-1">Workspace Pro</p>
+              <div className="mt-6 px-4 py-2.5 rounded-xl bg-cyan-500/20 text-cyan-300 text-sm font-bold flex items-center space-x-2">
+                <span>Painel Kanban</span>
+              </div>
+            </aside>
+
+            <main className="flex-1 flex flex-col">
+              <header className="mb-6 flex justify-between items-center bg-[#0a1128] border border-slate-800 p-4 rounded-2xl">
+                <h2 className="text-xl font-bold">Painel Kanban Operacional</h2>
+                <span className="text-xs bg-emerald-500/20 text-emerald-300 px-3 py-1 rounded-full font-bold">Sistema Ativo</span>
+              </header>
+
+              <div className="flex space-x-4 overflow-x-auto pb-4">
+                {['solicitacoes', 'elaboracao', 'protocolado', 'concluido'].map(status => (
+                  <div key={status} className="w-80 bg-[#0a1128] border border-slate-800 rounded-2xl p-4 flex flex-col">
+                    <h3 className="font-bold text-xs uppercase text-slate-300 mb-3 pb-2 border-b border-slate-800">
+                      {status.toUpperCase()}
+                    </h3>
+                    <div className="space-y-2">
+                      {cards.filter(c => c.status === status).map(card => (
+                        <div key={card.id} className="bg-[#0e1738] border border-slate-700 rounded-xl p-3 shadow-md">
+                          <p className="text-sm font-bold text-slate-100">{card.title}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </main>
+          </div>
+        );
+      }
+
+      // Execução imediata garantida
+      const container = document.getElementById('root');
+      const root = ReactDOM.createRoot(container);
+      root.render(<App />);
     </script>
   </body>
 </html>
