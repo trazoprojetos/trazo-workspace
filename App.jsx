@@ -1,0 +1,759 @@
+const { useState, useEffect, useRef, useMemo } = React;
+const LucideIcons = window.lucide;
+
+// --- FIREBASE CONFIG ---
+const firebaseConfig = {
+  apiKey: "AIzaSyCEODV9lJYlpFcOen1qJGpwcABFxudAPf8",
+  authDomain: "trazo-workspace.firebaseapp.com",
+  projectId: "trazo-workspace",
+  storageBucket: "trazo-workspace.firebasestorage.app",
+  messagingSenderId: "794212882855",
+  appId: "1:794212882855:web:f5a04f4129ac6d1b1c3e82"
+};
+
+let app, auth, db;
+try {
+  if (window.firebase) {
+    app = window.firebase.initializeApp(firebaseConfig);
+    auth = window.firebase.auth();
+    db = window.firebase.firestore();
+  }
+} catch (e) {
+  console.warn("Firebase initialized via fallback.");
+}
+
+const appId = 'trazo-workspace-v1';
+const LOCAL_STORAGE_CLIENTS_KEY = 'trazo_clients_v1';
+const LOCAL_STORAGE_CARDS_KEY = 'trazo_cards_v1';
+const LOCAL_STORAGE_MEMBERS_KEY = 'trazo_members_v1';
+const LOCAL_STORAGE_ACTIVE_USER_KEY = 'trazo_active_user_v1';
+const LOCAL_STORAGE_COLUMNS_KEY = 'trazo_columns_v1';
+
+const DEFAULT_COLUMNS = [
+  { id: 'solicitacoes', label: 'Solicitações', color: 'bg-slate-900/80 border-slate-700' },
+  { id: 'elaboracao', label: 'Em Elaboração', color: 'bg-blue-950/50 border-blue-800/60' },
+  { id: 'protocolado', label: 'Protocolado', color: 'bg-amber-950/50 border-amber-800/60' },
+  { id: 'execucao', label: 'Execução', color: 'bg-purple-950/50 border-purple-800/60' },
+  { id: 'concluido', label: 'Concluído', color: 'bg-emerald-950/50 border-emerald-800/60' },
+];
+
+const DEFAULT_MEMBERS = [
+  { 
+    id: 'm_master_gabriella', 
+    name: 'Gabriella Gontijo', 
+    role: 'Engenheira / Gestora Master', 
+    cpf: '000.000.000-01', 
+    rg: 'MG-00.000.001', 
+    pix: 'gabriella@trazo.com.br', 
+    phone: '(31) 99999-8888',
+    email: 'gabriella@trazo.com.br',
+    avatarUrl: '', 
+    pin: '1234',
+    isSystemAdmin: true, 
+    canAccessKanban: true,
+    canAccessResponsibilities: true,
+    canAccessFinancialAdmin: true,
+    canAccessFinancialOps: true,
+    canAccessClients: true,
+    canAccessMembers: true
+  },
+  { 
+    id: 'm_2', 
+    name: 'William Portela', 
+    role: 'Projetista / T. Técnico', 
+    cpf: '000.000.000-02', 
+    rg: 'SP-00.000.002', 
+    pix: 'william@trazo.com.br', 
+    phone: '(11) 98888-7777',
+    email: 'william@trazo.com.br',
+    avatarUrl: '', 
+    pin: '0000',
+    isSystemAdmin: false, 
+    canAccessKanban: true,
+    canAccessResponsibilities: true,
+    canAccessFinancialAdmin: false,
+    canAccessFinancialOps: true,
+    canAccessClients: true,
+    canAccessMembers: false
+  }
+];
+
+const PRESET_TAGS = [
+  { id: 't_1', name: 'CLCB', color: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' },
+  { id: 't_2', name: 'AVCB', color: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40' },
+  { id: 't_3', name: 'Vistoria Urgente', color: 'bg-rose-500/20 text-rose-300 border-rose-500/40' },
+  { id: 't_4', name: 'Projeto Comercial', color: 'bg-amber-500/20 text-amber-300 border-amber-500/40' },
+  { id: 't_5', name: 'VIP / Prioritário', color: 'bg-purple-500/20 text-purple-300 border-purple-500/40' },
+  { id: 't_6', name: 'Aprovação Pendente', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' },
+];
+
+const convertFileToBase64 = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = (error) => reject(error);
+  });
+};
+
+function App() {
+  const [user, setUser] = useState(null);
+
+  const [columns, setColumns] = useState(() => {
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_COLUMNS_KEY);
+      return saved ? JSON.parse(saved) : DEFAULT_COLUMNS;
+    } catch (e) {
+      return DEFAULT_COLUMNS;
+    }
+  });
+
+  const [members, setMembers] = useState(() => {
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_MEMBERS_KEY);
+      return saved ? JSON.parse(saved) : DEFAULT_MEMBERS;
+    } catch (e) {
+      return DEFAULT_MEMBERS;
+    }
+  });
+
+  const [clients, setClients] = useState(() => {
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_CLIENTS_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  const [cards, setCards] = useState(() => {
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_CARDS_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  const [activeMemberId, setActiveMemberId] = useState(() => {
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_ACTIVE_USER_KEY);
+      return saved || 'm_master_gabriella';
+    } catch (e) {
+      return 'm_master_gabriella';
+    }
+  });
+
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPin, setLoginPin] = useState('');
+  const [loginError, setLoginError] = useState('');
+
+  const activeMember = useMemo(() => {
+    return members.find(m => m.id === activeMemberId) || members[0] || DEFAULT_MEMBERS[0];
+  }, [activeMemberId, members]);
+
+  const [currentView, setCurrentView] = useState('kanban');
+
+  const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+  const [editingClient, setEditingClient] = useState(null);
+
+  const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
+  const [editingMember, setEditingMember] = useState(null);
+
+  const [isCardModalOpen, setIsCardModalOpen] = useState(false);
+  const [editingCard, setEditingCard] = useState(null);
+  const [activeCardTab, setActiveCardTab] = useState('overview');
+
+  const [isColumnModalOpen, setIsColumnModalOpen] = useState(false);
+  const [editingColumn, setEditingColumn] = useState(null);
+
+  const [lightboxImage, setLightboxImage] = useState(null);
+  const [toastMessage, setToastMessage] = useState(null);
+
+  const showToast = (message, type = 'success') => {
+    setToastMessage({ message, type });
+    setTimeout(() => setToastMessage(null), 4000);
+  };
+
+  useEffect(() => {
+    try { localStorage.setItem(LOCAL_STORAGE_COLUMNS_KEY, JSON.stringify(columns)); } catch (e) {}
+  }, [columns]);
+
+  useEffect(() => {
+    try { localStorage.setItem(LOCAL_STORAGE_MEMBERS_KEY, JSON.stringify(members)); } catch (e) {}
+  }, [members]);
+
+  useEffect(() => {
+    try { localStorage.setItem(LOCAL_STORAGE_CLIENTS_KEY, JSON.stringify(clients)); } catch (e) {}
+  }, [clients]);
+
+  useEffect(() => {
+    try { localStorage.setItem(LOCAL_STORAGE_CARDS_KEY, JSON.stringify(cards)); } catch (e) {}
+  }, [cards]);
+
+  useEffect(() => {
+    try { localStorage.setItem(LOCAL_STORAGE_ACTIVE_USER_KEY, activeMemberId); } catch (e) {}
+  }, [activeMemberId]);
+
+  const visibleCards = useMemo(() => {
+    if (activeMember.isSystemAdmin) return cards;
+    return cards.filter(card => {
+      const isCurrent = card.currentAssignee === activeMember.name;
+      const isNext = card.nextAssignee === activeMember.name;
+      const hasTask = (card.checklist || []).some(task => task.assignee === activeMember.name);
+      return isCurrent || isNext || hasTask;
+    });
+  }, [cards, activeMember]);
+
+  useEffect(() => {
+    if (!auth) return;
+    const initAuth = async () => {
+      try {
+        await auth.signInAnonymously();
+      } catch (error) {}
+    };
+    initAuth();
+
+    const unsubscribe = auth.onAuthStateChanged((currentUser) => {
+      setUser(currentUser);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleLoginSubmit = (e) => {
+    e.preventDefault();
+    setLoginError('');
+
+    const target = members.find(m => 
+      m.email.toLowerCase().trim() === loginEmail.toLowerCase().trim() && 
+      m.pin === loginPin
+    );
+
+    if (target) {
+      setActiveMemberId(target.id);
+      setLoginEmail('');
+      setLoginPin('');
+      showToast(`Bem-vindo(a) de volta, ${target.name}!`);
+    } else {
+      setLoginError('E-mail ou PIN incorretos. Verifique suas credenciais.');
+    }
+  };
+
+  const handleSaveColumn = (colData) => {
+    const colId = colData.id || `col_${Date.now()}`;
+    const colToSave = { ...colData, id: colId };
+
+    setColumns(prev => {
+      const exists = prev.some(c => c.id === colId);
+      if (exists) return prev.map(c => c.id === colId ? colToSave : c);
+      return [...prev, colToSave];
+    });
+
+    setIsColumnModalOpen(false);
+    setEditingColumn(null);
+    showToast('Coluna salva com sucesso!');
+  };
+
+  const handleDeleteColumn = (colId) => {
+    if (columns.length <= 1) {
+      showToast('O Kanban precisa ter pelo menos 1 coluna!', 'error');
+      return;
+    }
+    const targetCol = columns.find(c => c.id !== colId);
+    setCards(prev => prev.map(c => c.status === colId ? { ...c, status: targetCol.id } : c));
+    setColumns(prev => prev.filter(c => c.id !== colId));
+    showToast('Coluna removida.');
+  };
+
+  const handleSaveMember = async (memberData) => {
+    if (!activeMember.isSystemAdmin) {
+      showToast('Apenas Administrador Master pode salvar membros!', 'error');
+      return;
+    }
+
+    const memberId = memberData.id || `member_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const memberToSave = { ...memberData, id: memberId, updatedAt: new Date().toISOString() };
+
+    setMembers(prev => {
+      const exists = prev.some(m => m.id === memberId);
+      if (exists) return prev.map(m => m.id === memberId ? memberToSave : m);
+      return [memberToSave, ...prev];
+    });
+
+    setIsMemberModalOpen(false);
+    setEditingMember(null);
+    showToast('Membro salvo com sucesso!');
+  };
+
+  const handleDeleteMember = async (memberId) => {
+    if (!activeMember.isSystemAdmin) {
+      showToast('Apenas Administrador Master pode excluir membros!', 'error');
+      return;
+    }
+    setMembers(prev => prev.filter(m => m.id !== memberId));
+    showToast('Membro removido!');
+  };
+
+  const handleSaveClient = async (clientData) => {
+    const clientId = clientData.id || `client_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const clientToSave = { ...clientData, id: clientId, updatedAt: new Date().toISOString() };
+
+    setClients(prev => {
+      const exists = prev.some(c => c.id === clientId);
+      if (exists) return prev.map(c => c.id === clientId ? clientToSave : c);
+      return [clientToSave, ...prev];
+    });
+
+    setIsClientModalOpen(false);
+    setEditingClient(null);
+    showToast('Cliente atualizado!');
+  };
+
+  const handleDeleteClient = async (clientId) => {
+    setClients(prev => prev.filter(c => c.id !== clientId));
+    showToast('Cliente removido!');
+  };
+
+  const handleSaveCard = async (cardData) => {
+    const cardId = cardData.id || `card_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const cardToSave = {
+      ...cardData,
+      id: cardId,
+      status: cardData.status || (columns[0]?.id || 'solicitacoes'),
+      payments: cardData.payments || [],
+      checklist: cardData.checklist || [],
+      tags: cardData.tags || [],
+      images: cardData.images || [],
+      notes: cardData.notes || '',
+      currentAssignee: cardData.currentAssignee || 'Sem Atribuição',
+      nextAssignee: cardData.nextAssignee || 'Sem Atribuição',
+      updatedAt: new Date().toISOString()
+    };
+
+    setCards(prev => {
+      const exists = prev.some(c => c.id === cardId);
+      if (exists) return prev.map(c => c.id === cardId ? cardToSave : c);
+      return [cardToSave, ...prev];
+    });
+
+    setIsCardModalOpen(false);
+    setEditingCard(null);
+    showToast('Cartão salvo!');
+  };
+
+  const handleToggleTask = async (cardId, taskId) => {
+    setCards(prev => prev.map(card => {
+      if (card.id !== cardId) return card;
+      const newChecklist = (card.checklist || []).map(task => 
+        task.id === taskId ? { ...task, done: !task.done } : task
+      );
+      return { ...card, checklist: newChecklist, updatedAt: new Date().toISOString() };
+    }));
+  };
+
+  const handleDeleteCard = async (cardId) => {
+    setCards(prev => prev.filter(c => c.id !== cardId));
+    setIsCardModalOpen(false);
+    setEditingCard(null);
+    showToast('Cartão excluído!');
+  };
+
+  const updateCardStatus = async (cardId, newStatus) => {
+    setCards(prev => prev.map(c => c.id === cardId ? { ...c, status: newStatus, updatedAt: new Date().toISOString() } : c));
+  };
+
+  return (
+    <div className="min-h-screen bg-[#070b19] text-slate-100 font-sans selection:bg-cyan-500/30 overflow-hidden flex flex-col md:flex-row relative">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,_rgba(15,23,42,0.8)_0%,_transparent_50%),radial-gradient(circle_at_80%_80%,_rgba(10,25,50,0.6)_0%,_transparent_50%)] z-0 pointer-events-none"></div>
+
+      {toastMessage && (
+        <div className={`fixed bottom-5 right-5 z-50 px-4 py-3 rounded-xl shadow-2xl border flex items-center space-x-3 animate-in fade-in ${
+          toastMessage.type === 'error' ? 'bg-rose-950/90 border-rose-500/50 text-rose-200' : 'bg-emerald-950/90 border-emerald-500/50 text-emerald-200'
+        }`}>
+          <LucideIcons.ShieldCheck size={20} />
+          <span className="text-sm font-medium">{toastMessage.message}</span>
+        </div>
+      )}
+
+      {/* Sidebar Navigation */}
+      <aside className="w-full md:w-64 bg-[#0a1128]/80 backdrop-blur-2xl border-b md:border-b-0 md:border-r border-slate-800/80 z-10 flex flex-col justify-between shrink-0 shadow-2xl">
+        <div>
+          <div className="p-6 border-b border-slate-800/60">
+            <div className="flex flex-col items-start space-y-1">
+              <div className="text-2xl font-serif tracking-[0.2em] font-extralight text-slate-100 flex items-center">
+                <span>TRA</span>
+                <span className="relative inline-block ml-0.5"><span className="text-slate-300">Z</span></span>
+                <span className="ml-0.5">O</span>
+              </div>
+              <div className="w-16 h-[1px] bg-slate-400/50 my-0.5"></div>
+              <p className="text-[9px] text-slate-400 font-sans tracking-[0.25em] uppercase font-light">
+                ENGENHARIA & ARQUITETURA
+              </p>
+              <div className="mt-2 px-2 py-0.5 rounded bg-slate-800/80 border border-slate-700/50 text-[10px] text-cyan-400 font-mono tracking-wider font-semibold">
+                WORKSPACE PRO
+              </div>
+            </div>
+          </div>
+          
+          <nav className="p-4 space-y-1.5">
+            {(activeMember.isSystemAdmin || activeMember.canAccessKanban) && (
+              <button 
+                onClick={() => setCurrentView('kanban')}
+                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all font-medium text-sm ${
+                  currentView === 'kanban' ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 shadow-lg' : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                }`}
+              >
+                <LucideIcons.LayoutDashboard size={18} />
+                <span>Painel Kanban</span>
+              </button>
+            )}
+
+            {(activeMember.isSystemAdmin || activeMember.canAccessResponsibilities) && (
+              <button 
+                onClick={() => setCurrentView('responsibilities')}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all font-medium text-sm ${
+                  currentView === 'responsibilities' ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 shadow-lg' : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                }`}
+              >
+                <div className="flex items-center space-x-3">
+                  <LucideIcons.ListTodo size={18} />
+                  <span>Responsabilidades</span>
+                </div>
+              </button>
+            )}
+
+            {(activeMember.isSystemAdmin || activeMember.canAccessFinancialAdmin) && (
+              <button 
+                onClick={() => setCurrentView('financial_admin')}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all font-medium text-sm ${
+                  currentView === 'financial_admin' ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 shadow-lg' : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                }`}
+              >
+                <div className="flex items-center space-x-3">
+                  <LucideIcons.BarChart3 size={18} className="text-emerald-400" />
+                  <span>Financeiro Geral (Master)</span>
+                </div>
+                <LucideIcons.Lock size={12} className="text-amber-400" />
+              </button>
+            )}
+
+            {(activeMember.isSystemAdmin || activeMember.canAccessFinancialOps) && (
+              <button 
+                onClick={() => setCurrentView('financial_ops')}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all font-medium text-sm ${
+                  currentView === 'financial_ops' ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 shadow-lg' : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                }`}
+              >
+                <div className="flex items-center space-x-3">
+                  <LucideIcons.CreditCard size={18} className="text-cyan-400" />
+                  <span>Financeiro Operacional</span>
+                </div>
+              </button>
+            )}
+
+            {(activeMember.isSystemAdmin || activeMember.canAccessClients) && (
+              <button 
+                onClick={() => setCurrentView('clients')}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all font-medium text-sm ${
+                  currentView === 'clients' ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 shadow-lg' : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                }`}
+              >
+                <div className="flex items-center space-x-3">
+                  <LucideIcons.Users size={18} />
+                  <span>Clientes Cadastrados</span>
+                </div>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-mono">{clients.length}</span>
+              </button>
+            )}
+
+            {(activeMember.isSystemAdmin || activeMember.canAccessMembers) && (
+              <button 
+                onClick={() => setCurrentView('members')}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all font-medium text-sm ${
+                  currentView === 'members' ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 shadow-lg' : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                }`}
+              >
+                <div className="flex items-center space-x-3">
+                  <LucideIcons.UserCheck size={18} />
+                  <span>Equipe & Permissões</span>
+                </div>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-mono">{members.length}</span>
+              </button>
+            )}
+          </nav>
+        </div>
+
+        {/* Login Switcher Area */}
+        <div className="p-4 m-4 rounded-2xl bg-[#080d1e] border border-slate-800 text-xs text-slate-300 space-y-3 shadow-xl">
+          <div className="flex items-center justify-between font-bold text-slate-200 border-b border-slate-800 pb-2">
+            <div className="flex items-center space-x-2">
+              <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center font-bold text-cyan-300 text-xs">
+                {(activeMember.name || '?').charAt(0)}
+              </div>
+              <div className="truncate max-w-[100px]">
+                <div className="font-bold text-slate-100 text-xs truncate">{activeMember.name}</div>
+                <div className="text-[9px] text-slate-400 truncate">{activeMember.role}</div>
+              </div>
+            </div>
+            <span className={`text-[9px] px-2 py-0.5 rounded font-mono font-bold ${
+              activeMember.isSystemAdmin ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-cyan-500/20 text-cyan-300'
+            }`}>
+              {activeMember.isSystemAdmin ? 'MASTER' : 'MEMBRO'}
+            </span>
+          </div>
+
+          <form onSubmit={handleLoginSubmit} className="space-y-2 pt-1">
+            <label className="text-[10px] uppercase font-bold text-slate-400 block">Autenticar Conta (E-mail + PIN):</label>
+            <input 
+              type="email" 
+              placeholder="E-mail"
+              value={loginEmail}
+              onChange={e => setLoginEmail(e.target.value)}
+              className="bg-slate-950 border border-slate-800 rounded-lg p-2 w-full text-xs text-slate-200 outline-none focus:border-cyan-500"
+              required
+            />
+            <div className="flex space-x-1.5">
+              <input 
+                type="password" 
+                placeholder="PIN"
+                value={loginPin}
+                onChange={e => setLoginPin(e.target.value)}
+                className="bg-slate-950 border border-slate-800 rounded-lg p-2 w-20 text-xs text-slate-200 outline-none focus:border-cyan-500"
+                required
+              />
+              <button type="submit" className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-lg text-xs transition-colors">
+                Entrar
+              </button>
+            </div>
+            {loginError && <p className="text-[10px] text-rose-400 font-medium">{loginError}</p>}
+          </form>
+        </div>
+      </aside>
+
+      {/* Main Container */}
+      <main className="flex-1 flex flex-col h-screen overflow-hidden z-10 min-w-0">
+        <header className="px-6 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800/80 bg-[#0a1128]/60 backdrop-blur-md gap-4">
+          <div>
+            <h2 className="text-xl font-extrabold text-slate-100">
+              {currentView === 'kanban' && 'Painel Kanban Operacional'}
+              {currentView === 'responsibilities' && 'Painel de Responsabilidades'}
+              {currentView === 'financial_admin' && 'Painel Financeiro Geral (Master)'}
+              {currentView === 'financial_ops' && 'Painel Financeiro Operacional'}
+              {currentView === 'clients' && 'Gestão de Clientes Cadastrados'}
+              {currentView === 'members' && 'Equipe & Gestão de Permissões'}
+            </h2>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {currentView === 'kanban' && activeMember.isSystemAdmin && (
+              <button
+                onClick={() => { setEditingColumn(null); setIsColumnModalOpen(true); }}
+                className="flex items-center space-x-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded-xl text-xs font-bold border border-slate-700"
+              >
+                <LucideIcons.Plus size={14} />
+                <span>Nova Coluna</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => {
+                if (currentView === 'members') {
+                  if (!activeMember.isSystemAdmin) {
+                    showToast('Apenas o Master pode cadastrar membros!', 'error');
+                    return;
+                  }
+                  setEditingMember(null);
+                  setIsMemberModalOpen(true);
+                } else if (currentView === 'clients') {
+                  setEditingClient(null);
+                  setIsClientModalOpen(true);
+                } else {
+                  setEditingCard(null);
+                  setActiveCardTab('overview');
+                  setIsCardModalOpen(true);
+                }
+              }}
+              className="flex items-center space-x-2 bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg transition-all"
+            >
+              <LucideIcons.Plus size={16} />
+              <span>
+                {currentView === 'members' ? 'Novo Membro' : currentView === 'clients' ? 'Novo Cliente' : 'Novo Cartão'}
+              </span>
+            </button>
+          </div>
+        </header>
+
+        {/* View Loader */}
+        <div className="flex-1 overflow-auto p-4 sm:p-6">
+          {currentView === 'kanban' && (
+            <div className="flex space-x-4 overflow-x-auto pb-4 h-full items-start">
+              {columns.map(col => {
+                const columnCards = visibleCards.filter(c => c.status === col.id);
+                return (
+                  <div key={col.id} className={`w-80 rounded-2xl border flex flex-col shrink-0 shadow-2xl ${col.color}`}>
+                    <div className="p-3.5 border-b border-slate-800 flex justify-between items-center bg-[#070d1e] rounded-t-2xl">
+                      <span className="font-bold text-xs uppercase tracking-wider text-slate-200">{col.label}</span>
+                      <span className="bg-cyan-500/20 text-cyan-300 text-[10px] px-2 py-0.5 rounded-full font-bold">{columnCards.length}</span>
+                    </div>
+                    <div className="p-3 space-y-3 flex-1 overflow-y-auto max-h-[70vh]">
+                      {columnCards.map(card => {
+                        const client = clients.find(c => c.id === card.clientId);
+                        return (
+                          <div 
+                            key={card.id} 
+                            onClick={() => { setEditingCard(card); setActiveCardTab('overview'); setIsCardModalOpen(true); }}
+                            className="bg-[#0e1738] border border-slate-700/60 hover:border-cyan-500 rounded-2xl p-4 shadow-xl cursor-pointer space-y-2"
+                          >
+                            <span className="text-[10px] text-cyan-400 font-mono block font-bold">{client?.name || 'Cliente Geral'}</span>
+                            <h4 className="font-bold text-sm text-slate-100">{card.title}</h4>
+                            {(card.tags || []).length > 0 && (
+                              <div className="flex flex-wrap gap-1 pt-1">
+                                {card.tags.map(tId => {
+                                  const tag = PRESET_TAGS.find(t => t.id === tId);
+                                  return tag ? <span key={tId} className={`text-[9px] px-2 py-0.5 rounded border font-bold ${tag.color}`}>{tag.name}</span> : null;
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {currentView === 'clients' && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {clients.map(client => (
+                <div key={client.id} className="bg-[#0a1128] border border-slate-800 rounded-2xl p-4 space-y-2 shadow-xl">
+                  <h4 className="font-bold text-slate-100 text-sm">{client.name}</h4>
+                  <p className="text-xs text-slate-400 font-mono">CNPJ: {client.cnpj || 'N/A'}</p>
+                </div>
+              ))}
+              {clients.length === 0 && <p className="text-sm text-slate-400 italic">Nenhum cliente cadastrado ainda. Clique em "Novo Cliente".</p>}
+            </div>
+          )}
+
+          {currentView === 'members' && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {members.map(m => (
+                <div key={m.id} className="bg-[#0a1128] border border-slate-800 rounded-2xl p-4 space-y-2 shadow-xl">
+                  <h4 className="font-bold text-slate-100 text-sm flex items-center gap-1">
+                    <span>{m.name}</span>
+                    {m.isSystemAdmin && <LucideIcons.Shield size={14} className="text-amber-400" />}
+                  </h4>
+                  <p className="text-xs text-cyan-400">{m.role}</p>
+                  <p className="text-[10px] text-slate-400 font-mono">E-mail: {m.email}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </main>
+
+      {/* MODAL CARD */}
+      {isCardModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+          <div className="bg-[#0a1128] border border-slate-800 rounded-3xl p-6 w-full max-w-lg space-y-4 shadow-2xl">
+            <h3 className="text-lg font-bold text-slate-100 flex items-center space-x-2">
+              <LucideIcons.Sparkles size={18} className="text-cyan-400" />
+              <span>Criar / Editar Cartão</span>
+            </h3>
+            
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-slate-400 block mb-1 font-bold">Título da Solicitação</label>
+                <input 
+                  type="text" 
+                  placeholder="Ex: Projeto de Incêndio - Matriz" 
+                  id="modal-card-title" 
+                  defaultValue={editingCard?.title || ''} 
+                  className="bg-slate-950 border border-slate-800 text-slate-100 text-sm rounded-xl p-3 w-full outline-none focus:border-cyan-500" 
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-slate-400 block mb-1 font-bold">Cliente</label>
+                <select 
+                  id="modal-card-client"
+                  defaultValue={editingCard?.clientId || clients[0]?.id || ''}
+                  className="bg-slate-950 border border-slate-800 text-slate-100 text-sm rounded-xl p-3 w-full outline-none focus:border-cyan-500"
+                >
+                  <option value="" disabled>Selecione o cliente...</option>
+                  {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-2 border-t border-slate-800">
+              <button onClick={() => setIsCardModalOpen(false)} className="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-bold rounded-xl">Cancelar</button>
+              <button 
+                onClick={() => {
+                  const title = document.getElementById('modal-card-title').value;
+                  const clientId = document.getElementById('modal-card-client').value;
+                  if (title) handleSaveCard({ ...editingCard, title, clientId });
+                }} 
+                className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-xl shadow-lg"
+              >
+                Salvar Cartão
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CLIENTE */}
+      {isClientModalOpen && (
+        <ClientModal 
+          client={editingClient} 
+          onClose={() => setIsClientModalOpen(false)} 
+          onSave={handleSaveClient} 
+        />
+      )}
+    </div>
+  );
+}
+
+function ClientModal({ client, onClose, onSave }) {
+  const [name, setName] = useState(client?.name || '');
+  const [cnpj, setCnpj] = useState(client?.cnpj || '');
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+      <div className="bg-[#0a1128] border border-slate-800 rounded-3xl p-6 w-full max-w-md space-y-4 shadow-2xl">
+        <h3 className="text-lg font-bold text-slate-100">Novo Cliente Cadastrado</h3>
+        <div className="space-y-3">
+          <input 
+            type="text" 
+            placeholder="Nome / Razão Social" 
+            value={name} 
+            onChange={e => setName(e.target.value)} 
+            className="bg-slate-950 border border-slate-800 text-slate-100 text-sm rounded-xl p-3 w-full outline-none" 
+          />
+          <input 
+            type="text" 
+            placeholder="CNPJ" 
+            value={cnpj} 
+            onChange={e => setCnpj(e.target.value)} 
+            className="bg-slate-950 border border-slate-800 text-slate-100 text-sm rounded-xl p-3 w-full outline-none" 
+          />
+        </div>
+        <div className="flex justify-end space-x-2 pt-2">
+          <button onClick={onClose} className="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-bold rounded-xl">Cancelar</button>
+          <button 
+            onClick={() => {
+              if (name) onSave({ id: client?.id, name, cnpj });
+            }} 
+            className="px-5 py-2 bg-cyan-600 text-white text-xs font-bold rounded-xl"
+          >
+            Salvar Cliente
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+window.App = App;
