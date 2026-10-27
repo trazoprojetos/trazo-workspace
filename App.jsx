@@ -1,28 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { initializeApp } from 'firebase/app';
-import { 
-  getAuth, 
-  signInAnonymously, 
-  signInWithCustomToken, 
-  onAuthStateChanged 
-} from 'firebase/auth';
-import { 
-  getFirestore, 
-  collection, 
-  doc, 
-  setDoc, 
-  onSnapshot, 
-  updateDoc, 
-  deleteDoc 
-} from 'firebase/firestore';
-import { 
-  ShieldAlert, ShieldCheck, Sparkles, ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
-  PieChart, Circle, Image as ImageIcon, Tag, Copy, MoreHorizontal, Eye, EyeOff, Paperclip,
-  TrendingUp, BarChart3, Wallet, ArrowUpRight, ArrowDownRight, ArrowRight, Receipt,
-  LayoutDashboard, ListTodo, Users, UserCheck, Download, Upload, Plus, X, Building2,
-  CreditCard, CheckCircle2, Trash2, FileText, CheckSquare, Calendar, DollarSign, RefreshCw,
-  Lock, Shield, User, Check, Clock, Edit3, Phone, Mail, Key, LogOut, AlertTriangle, Layers
-} from 'lucide-react';
+const { useState, useEffect, useRef, useMemo } = React;
 
 // --- FIREBASE INITIALIZATION ---
 const firebaseConfig = {
@@ -36,9 +12,11 @@ const firebaseConfig = {
 
 let app, auth, db;
 try {
-  app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  db = getFirestore(app);
+  if (window.firebase && window.firebase.initializeApp) {
+    app = window.firebase.initializeApp(firebaseConfig);
+    auth = window.firebase.auth(app);
+    db = window.firebase.firestore(app);
+  }
 } catch (e) {
   console.warn("Firebase fallback initialized.");
 }
@@ -120,7 +98,7 @@ const convertFileToBase64 = (file) => {
   });
 };
 
-export default function App() {
+function App() {
   const [user, setUser] = useState(null);
 
   const [columns, setColumns] = useState(() => {
@@ -233,16 +211,16 @@ export default function App() {
     if (!auth) return;
     const initAuth = async () => {
       try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
+        if (typeof window.firebaseAuthToken !== 'undefined' && window.firebaseAuthToken) {
+          await window.firebase.auth().signInWithCustomToken(auth, window.firebaseAuthToken);
         } else {
-          await signInAnonymously(auth);
+          await auth.signInAnonymously();
         }
       } catch (error) {}
     };
     initAuth();
 
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = auth.onAuthStateChanged((currentUser) => {
       setUser(currentUser);
     });
     return () => unsubscribe();
@@ -251,21 +229,21 @@ export default function App() {
   useEffect(() => {
     if (!user || !db) return;
 
-    const membersRef = collection(db, 'artifacts', appId, 'users', user.uid, 'members');
-    const clientsRef = collection(db, 'artifacts', appId, 'users', user.uid, 'clients');
-    const cardsRef = collection(db, 'artifacts', appId, 'users', user.uid, 'cards');
+    const membersRef = window.firebase.firestore().collection(db, 'artifacts', appId, 'users', user.uid, 'members');
+    const clientsRef = window.firebase.firestore().collection(db, 'artifacts', appId, 'users', user.uid, 'clients');
+    const cardsRef = window.firebase.firestore().collection(db, 'artifacts', appId, 'users', user.uid, 'cards');
 
-    const unsubMembers = onSnapshot(membersRef, (snapshot) => {
+    const unsubMembers = window.firebase.firestore().onSnapshot(membersRef, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       if (data.length > 0) setMembers(data);
     }, (e) => {});
 
-    const unsubClients = onSnapshot(clientsRef, (snapshot) => {
+    const unsubClients = window.firebase.firestore().onSnapshot(clientsRef, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       if (data.length > 0) setClients(data);
     }, (e) => {});
 
-    const unsubCards = onSnapshot(cardsRef, (snapshot) => {
+    const unsubCards = window.firebase.firestore().onSnapshot(cardsRef, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       if (data.length > 0) setCards(data);
     }, (e) => {});
@@ -343,7 +321,7 @@ export default function App() {
 
     if (user && db) {
       try {
-        await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'members', memberId), memberToSave, { merge: true });
+        await window.firebase.firestore().setDoc(window.firebase.firestore().doc(db, 'artifacts', appId, 'users', user.uid, 'members', memberId), memberToSave, { merge: true });
       } catch (error) {}
     }
   };
@@ -358,7 +336,7 @@ export default function App() {
 
     if (user && db) {
       try {
-        await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'members', memberId));
+        await window.firebase.firestore().deleteDoc(window.firebase.firestore().doc(db, 'artifacts', appId, 'users', user.uid, 'members', memberId));
       } catch (e) {}
     }
   };
@@ -379,7 +357,7 @@ export default function App() {
 
     if (user && db) {
       try {
-        await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'clients', clientId), clientToSave, { merge: true });
+        await window.firebase.firestore().setDoc(window.firebase.firestore().doc(db, 'artifacts', appId, 'users', user.uid, 'clients', clientId), clientToSave, { merge: true });
       } catch (error) {}
     }
   };
@@ -390,7 +368,7 @@ export default function App() {
 
     if (user && db) {
       try {
-        await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'clients', clientId));
+        await window.firebase.firestore().deleteDoc(window.firebase.firestore().doc(db, 'artifacts', appId, 'users', user.uid, 'clients', clientId));
       } catch (e) {}
     }
   };
@@ -423,7 +401,7 @@ export default function App() {
 
     if (user && db) {
       try {
-        await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'cards', cardId), cardToSave, { merge: true });
+        await window.firebase.firestore().setDoc(window.firebase.firestore().doc(db, 'artifacts', appId, 'users', user.uid, 'cards', cardId), cardToSave, { merge: true });
       } catch (error) {}
     }
   };
@@ -441,7 +419,7 @@ export default function App() {
 
     if (user && db && updatedCard) {
       try {
-        await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'cards', cardId), {
+        await window.firebase.firestore().updateDoc(window.firebase.firestore().doc(db, 'artifacts', appId, 'users', user.uid, 'cards', cardId), {
           checklist: updatedCard.checklist,
           updatedAt: new Date().toISOString()
         });
@@ -457,7 +435,7 @@ export default function App() {
 
     if (user && db) {
       try {
-        await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'cards', cardId));
+        await window.firebase.firestore().deleteDoc(window.firebase.firestore().doc(db, 'artifacts', appId, 'users', user.uid, 'cards', cardId));
       } catch (e) {}
     }
   };
@@ -467,7 +445,7 @@ export default function App() {
     
     if (user && db) {
       try {
-        await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'cards', cardId), {
+        await window.firebase.firestore().updateDoc(window.firebase.firestore().doc(db, 'artifacts', appId, 'users', user.uid, 'cards', cardId), {
           status: newStatus,
           updatedAt: new Date().toISOString()
         });
@@ -484,7 +462,7 @@ export default function App() {
         <div className={`fixed bottom-5 right-5 z-50 px-4 py-3 rounded-xl shadow-2xl border flex items-center space-x-3 animate-in fade-in ${
           toastMessage.type === 'error' ? 'bg-rose-950/90 border-rose-500/50 text-rose-200' : 'bg-emerald-950/90 border-emerald-500/50 text-emerald-200'
         }`}>
-          <ShieldCheck size={20} />
+          <LucideIcons.ShieldCheck size={20} />
           <span className="text-sm font-medium">{toastMessage.message}</span>
         </div>
       )}
@@ -520,7 +498,7 @@ export default function App() {
                   currentView === 'kanban' ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 shadow-lg' : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
                 }`}
               >
-                <LayoutDashboard size={18} />
+                <LucideIcons.LayoutDashboard size={18} />
                 <span>Painel Kanban</span>
               </button>
             )}
@@ -533,7 +511,7 @@ export default function App() {
                 }`}
               >
                 <div className="flex items-center space-x-3">
-                  <ListTodo size={18} />
+                  <LucideIcons.ListTodo size={18} />
                   <span>Responsabilidades</span>
                 </div>
               </button>
@@ -547,10 +525,10 @@ export default function App() {
                 }`}
               >
                 <div className="flex items-center space-x-3">
-                  <BarChart3 size={18} className="text-emerald-400" />
+                  <LucideIcons.BarChart3 size={18} className="text-emerald-400" />
                   <span>Financeiro Geral (Master)</span>
                 </div>
-                <Lock size={12} className="text-amber-400" />
+                <LucideIcons.Lock size={12} className="text-amber-400" />
               </button>
             )}
 
@@ -562,7 +540,7 @@ export default function App() {
                 }`}
               >
                 <div className="flex items-center space-x-3">
-                  <CreditCard size={18} className="text-cyan-400" />
+                  <LucideIcons.CreditCard size={18} className="text-cyan-400" />
                   <span>Financeiro Operacional</span>
                 </div>
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-bold">R$</span>
@@ -577,7 +555,7 @@ export default function App() {
                 }`}
               >
                 <div className="flex items-center space-x-3">
-                  <Users size={18} />
+                  <LucideIcons.Users size={18} />
                   <span>Clientes Cadastrados</span>
                 </div>
                 <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-mono">{clients.length}</span>
@@ -592,7 +570,7 @@ export default function App() {
                 }`}
               >
                 <div className="flex items-center space-x-3">
-                  <UserCheck size={18} />
+                  <LucideIcons.UserCheck size={18} />
                   <span>Equipe & Permissões</span>
                 </div>
                 <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-mono">{members.length}</span>
@@ -671,7 +649,7 @@ export default function App() {
                 onClick={() => { setEditingColumn(null); setIsColumnModalOpen(true); }}
                 className="flex items-center space-x-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded-xl text-xs font-bold border border-slate-700"
               >
-                <Plus size={14} />
+                <LucideIcons.Plus size={14} />
                 <span>Nova Coluna</span>
               </button>
             )}
@@ -696,7 +674,7 @@ export default function App() {
               }}
               className="flex items-center space-x-2 bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg ml-auto sm:ml-0 transition-all"
             >
-              <Plus size={16} />
+              <LucideIcons.Plus size={16} />
               <span>
                 {currentView === 'members' ? 'Novo Membro' : currentView === 'clients' ? 'Novo Cliente' : 'Novo Cartão'}
               </span>
@@ -818,7 +796,7 @@ export default function App() {
               onClick={() => setLightboxImage(null)}
               className="absolute -top-12 right-0 p-2 bg-slate-800 text-white rounded-full"
             >
-              <X size={24} />
+              <LucideIcons.X size={24} />
             </button>
             <img src={lightboxImage} alt="Preview" className="max-w-full max-h-[85vh] rounded-2xl object-contain shadow-2xl border border-white/10" />
           </div>
@@ -836,11 +814,11 @@ function ModalWrapper({ isOpen, onClose, title, children, maxWidth = "max-w-2xl"
       <div className={`bg-[#0a1128] border border-slate-800 rounded-3xl shadow-2xl w-full ${maxWidth} overflow-hidden flex flex-col max-h-[90vh]`}>
         <div className="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-[#070c1e]">
           <h3 className="text-lg font-bold text-slate-100 flex items-center space-x-2">
-            <Sparkles size={18} className="text-cyan-400" />
+            <LucideIcons.Sparkles size={18} className="text-cyan-400" />
             <span>{title}</span>
           </h3>
           <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-white rounded-xl">
-            <X size={20} />
+            <LucideIcons.X size={20} />
           </button>
         </div>
         <div className="flex-1 overflow-y-auto custom-scrollbar">
@@ -879,15 +857,15 @@ function KanbanBoard({ cards, clients, members, columns, activeMember, onCardCli
     <div className="flex flex-col h-full space-y-3">
       <div className="flex justify-between items-center text-xs text-slate-400 px-1">
         <span className="font-semibold text-slate-300 flex items-center gap-1.5">
-          <LayoutDashboard size={14} className="text-cyan-400" />
+          <LucideIcons.LayoutDashboard size={14} className="text-cyan-400" />
           {columns.length} Colunas Personalizáveis
         </span>
         <div className="flex items-center space-x-2">
           <button onClick={() => handleScroll('left')} className="p-1.5 bg-slate-900 border border-slate-800 rounded-lg text-slate-300 hover:bg-slate-800">
-            <ChevronLeft size={16} />
+            <LucideIcons.ChevronLeft size={16} />
           </button>
           <button onClick={() => handleScroll('right')} className="p-1.5 bg-slate-900 border border-slate-800 rounded-lg text-slate-300 hover:bg-slate-800">
-            <ChevronRight size={16} />
+            <LucideIcons.ChevronRight size={16} />
           </button>
         </div>
       </div>
@@ -917,10 +895,10 @@ function KanbanBoard({ cards, clients, members, columns, activeMember, onCardCli
                 {activeMember.isSystemAdmin && (
                   <div className="flex items-center space-x-1 opacity-0 group-hover/col:opacity-100 transition-opacity">
                     <button onClick={() => onEditColumn(col)} className="p-1 text-slate-400 hover:text-white">
-                      <Edit3 size={13} />
+                      <LucideIcons.Edit3 size={13} />
                     </button>
                     <button onClick={() => onDeleteColumn(col.id)} className="p-1 text-slate-400 hover:text-rose-400">
-                      <Trash2 size={13} />
+                      <LucideIcons.Trash2 size={13} />
                     </button>
                   </div>
                 )}
@@ -970,7 +948,7 @@ function KanbanCard({ card, client, members, onClick, onDragStart, onToggleTask 
             {client?.logoUrl ? (
               <img src={client.logoUrl} alt={client.name} className="w-5 h-5 rounded object-cover border border-slate-700" />
             ) : (
-              <Building2 size={14} className="text-cyan-400 shrink-0" />
+              <LucideIcons.Building2 size={14} className="text-cyan-400 shrink-0" />
             )}
             <span className="font-black text-xs text-cyan-300 uppercase tracking-wide truncate">
               {client?.name || 'Cliente Não Vinculado'}
@@ -978,7 +956,7 @@ function KanbanCard({ card, client, members, onClick, onDragStart, onToggleTask 
           </div>
           {isOverdue && (
             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center gap-1 shrink-0">
-              <Clock size={10} /> Atrasado
+              <LucideIcons.Clock size={10} /> Atrasado
             </span>
           )}
         </div>
@@ -1009,7 +987,7 @@ function KanbanCard({ card, client, members, onClick, onDragStart, onToggleTask 
             className="w-full flex justify-between items-center text-[11px] text-slate-400 hover:text-slate-200"
           >
             <span className="flex items-center space-x-1.5 font-bold">
-              <CheckSquare size={13} className="text-cyan-400" />
+              <LucideIcons.CheckSquare size={13} className="text-cyan-400" />
               <span>{completedTasks}/{totalTasks} tarefas concluídas</span>
             </span>
             <span className="font-mono font-bold text-cyan-300">{progress}%</span>
@@ -1257,7 +1235,7 @@ function ClientsView({ clients, onEditClient, onDeleteClient }) {
                   <img src={client.logoUrl} alt={client.name} className="w-12 h-12 rounded-xl object-cover border border-slate-800" />
                 ) : (
                   <div className="w-12 h-12 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center font-bold text-cyan-400">
-                    <Building2 size={22} />
+                    <LucideIcons.Building2 size={22} />
                   </div>
                 )}
                 <div>
@@ -1267,10 +1245,10 @@ function ClientsView({ clients, onEditClient, onDeleteClient }) {
               </div>
               <div className="flex items-center space-x-1">
                 <button onClick={() => onEditClient(client)} className="p-1.5 text-slate-400 hover:text-white">
-                  <Edit3 size={16} />
+                  <LucideIcons.Edit3 size={16} />
                 </button>
                 <button onClick={() => onDeleteClient(client.id)} className="p-1.5 text-slate-400 hover:text-rose-400">
-                  <Trash2 size={16} />
+                  <LucideIcons.Trash2 size={16} />
                 </button>
               </div>
             </div>
@@ -1310,7 +1288,7 @@ function MembersView({ members, activeMember, onEditMember, onDeleteMember }) {
                 <div>
                   <h4 className="font-bold text-slate-100 text-sm flex items-center gap-1.5">
                     <span>{member.name}</span>
-                    {member.isSystemAdmin && <Shield size={14} className="text-amber-400" />}
+                    {member.isSystemAdmin && <LucideIcons.Shield size={14} className="text-amber-400" />}
                   </h4>
                   <p className="text-xs text-cyan-400">{member.role}</p>
                 </div>
@@ -1318,11 +1296,11 @@ function MembersView({ members, activeMember, onEditMember, onDeleteMember }) {
               {activeMember.isSystemAdmin && (
                 <div className="flex items-center space-x-1">
                   <button onClick={() => onEditMember(member)} className="p-1.5 text-slate-400 hover:text-white">
-                    <Edit3 size={16} />
+                    <LucideIcons.Edit3 size={16} />
                   </button>
                   {member.id !== activeMember.id && (
                     <button onClick={() => onDeleteMember(member.id)} className="p-1.5 text-slate-400 hover:text-rose-400">
-                      <Trash2 size={16} />
+                      <LucideIcons.Trash2 size={16} />
                     </button>
                   )}
                 </div>
@@ -1335,7 +1313,7 @@ function MembersView({ members, activeMember, onEditMember, onDeleteMember }) {
               <div className="flex justify-between items-center bg-slate-950 p-1.5 rounded border border-slate-800">
                 <span>PIN: {showPins[member.id] ? member.pin : '****'}</span>
                 <button onClick={() => togglePinShow(member.id)} className="text-slate-400 hover:text-white p-1">
-                  {showPins[member.id] ? <EyeOff size={14} /> : <Eye size={14} />}
+                  {showPins[member.id] ? <LucideIcons.EyeOff size={14} /> : <LucideIcons.Eye size={14} />}
                 </button>
               </div>
 
@@ -1509,7 +1487,7 @@ function ClientModal({ client, onClose, onSave }) {
             <img src={formData.logoUrl} alt="Logo" className="w-16 h-16 rounded-2xl object-cover border border-slate-800" />
           ) : (
             <div className="w-16 h-16 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center font-bold text-cyan-400">
-              <Building2 size={28} />
+              <LucideIcons.Building2 size={28} />
             </div>
           )}
           <div className="space-y-1">
@@ -1593,10 +1571,10 @@ function CardModal({ card, clients, members, columns, onClose, onSave, onDelete,
       <form id="card-form" onSubmit={handleSubmit} className="flex flex-col md:flex-row min-h-[500px]">
         <div className="w-full md:w-56 bg-slate-950/60 border-r border-slate-800 p-3 space-y-1">
           {[
-            { id: 'overview', icon: FileText, label: 'Geral & Prazos' },
-            { id: 'checklist', icon: CheckSquare, label: 'Checklist / Etapas' },
-            { id: 'finance', icon: DollarSign, label: 'Valores / Pagamentos' },
-            { id: 'notes', icon: Paperclip, label: 'Notas & Imagens' },
+            { id: 'overview', icon: LucideIcons.FileText, label: 'Geral & Prazos' },
+            { id: 'checklist', icon: LucideIcons.CheckSquare, label: 'Checklist / Etapas' },
+            { id: 'finance', icon: LucideIcons.DollarSign, label: 'Valores / Pagamentos' },
+            { id: 'notes', icon: LucideIcons.Paperclip, label: 'Notas & Imagens' },
           ].map(tab => (
             <button
               key={tab.id}
@@ -1618,7 +1596,7 @@ function CardModal({ card, clients, members, columns, onClose, onSave, onDelete,
                 onClick={() => onDelete(card.id)} 
                 className="w-full flex items-center justify-center space-x-2 px-3 py-2 bg-rose-950/50 hover:bg-rose-900/80 text-rose-300 border border-rose-500/30 rounded-xl text-xs font-bold"
               >
-                <Trash2 size={14} />
+                <LucideIcons.Trash2 size={14} />
                 <span>Excluir Cartão</span>
               </button>
             </div>
@@ -1775,7 +1753,7 @@ function CardModal({ card, clients, members, columns, onClose, onSave, onDelete,
                           }}
                           className="text-slate-500 hover:text-rose-400 p-1"
                         >
-                          <X size={14} />
+                          <LucideIcons.X size={14} />
                         </button>
                       </div>
                     </div>
@@ -1832,7 +1810,7 @@ function CardModal({ card, clients, members, columns, onClose, onSave, onDelete,
                         }} 
                         className="text-slate-500 hover:text-rose-400"
                       >
-                        <X size={12} />
+                        <LucideIcons.X size={12} />
                       </button>
                     </div>
                   ))}
@@ -1857,7 +1835,7 @@ function CardModal({ card, clients, members, columns, onClose, onSave, onDelete,
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-300 uppercase block">Anexar Imagens e Fotos</label>
                 <label className="text-xs font-bold text-cyan-300 cursor-pointer bg-slate-950 hover:bg-slate-900 p-3 rounded-xl border border-slate-800 flex items-center justify-center space-x-2">
-                  <Upload size={16} />
+                  <LucideIcons.Upload size={16} />
                   <span>Upload de Arquivos de Imagem</span>
                   <input type="file" accept="image/*" multiple onChange={handleImageUpload} className="hidden" />
                 </label>
@@ -1874,7 +1852,7 @@ function CardModal({ card, clients, members, columns, onClose, onSave, onDelete,
                         }}
                         className="absolute top-1 right-1 p-1 bg-rose-950/80 text-rose-200 rounded-full hover:bg-rose-900"
                       >
-                        <X size={12} />
+                        <LucideIcons.X size={12} />
                       </button>
                     </div>
                   ))}
@@ -1903,3 +1881,6 @@ if (typeof document !== 'undefined') {
   `;
   document.head.appendChild(style);
 }
+
+// Renderização final na página
+window.App = App;
